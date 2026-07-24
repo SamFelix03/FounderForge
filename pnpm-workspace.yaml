@@ -1,0 +1,6 @@
+packages:
+  - "apps/*"
+  - "services/*"
+  - "!services/_service-template"
+  - "packages/*"
+  - "packages/payments/*"
