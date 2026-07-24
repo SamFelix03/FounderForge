@@ -1,0 +1,8 @@
+{
+  "name": "outreach",
+  "version": "0.0.1",
+  "a2mcp_price_usd": 2.49,
+  "endpoint_path": "/v1/services/outreach/jobs",
+  "sla_minutes": 15,
+  "required_scopes": []
+}

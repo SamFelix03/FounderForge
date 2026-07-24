@@ -1,0 +1,32 @@
+{
+  "name": "@founderforge/screen-recording-service",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "echo \"no tests yet\""
+  },
+  "dependencies": {
+    "@founderforge/schemas": "workspace:*",
+    "@founderforge/observability": "workspace:*",
+    "@founderforge/connectors": "workspace:*",
+    "@founderforge/llm-core": "workspace:*",
+    "@founderforge/policy": "workspace:*",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

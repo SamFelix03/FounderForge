@@ -1,0 +1,8 @@
+{
+  "name": "screen-recording",
+  "version": "0.0.1",
+  "a2mcp_price_usd": 4.99,
+  "endpoint_path": "/v1/services/screen-recording/jobs",
+  "sla_minutes": 30,
+  "required_scopes": []
+}

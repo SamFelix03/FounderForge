@@ -1,0 +1,8 @@
+{
+  "name": "promo-video",
+  "version": "0.0.1",
+  "a2mcp_price_usd": 2.99,
+  "endpoint_path": "/v1/services/promo-video/jobs",
+  "sla_minutes": 15,
+  "required_scopes": []
+}
