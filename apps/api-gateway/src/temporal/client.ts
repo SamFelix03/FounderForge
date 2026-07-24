@@ -1,0 +1,67 @@
+import { Connection, Client } from "@temporalio/client";
+import { createLogger } from "@founderforge/observability";
+
+const log = createLogger("temporal.client");
+
+export function temporalConfig() {
+  return {
+    address: process.env.TEMPORAL_ADDRESS?.trim() || "localhost:7233",
+    namespace: process.env.TEMPORAL_NAMESPACE?.trim() || "default",
+    taskQueue: process.env.TEMPORAL_TASK_QUEUE?.trim() || "founderforge",
+  };
+}
+
+let clientPromise: Promise<Client> | undefined;
+
+export async function getTemporalClient(): Promise<Client> {
+  if (!clientPromise) {
+    clientPromise = (async () => {
+      const { address, namespace } = temporalConfig();
+      const connection = await Connection.connect({ address });
+      const client = new Client({ connection, namespace });
+      log.info("temporal client connected", { address, namespace });
+      return client;
+    })();
+  }
+  return clientPromise;
+}
+
+export async function startCompetitorResearchWorkflow(input: {
+  job_id: string;
+  product_name: string;
+  product_url?: string;
+}): Promise<string> {
+  const client = await getTemporalClient();
+  const { taskQueue } = temporalConfig();
+  const handle = await client.workflow.start("competitorResearchWorkflow", {
+    taskQueue,
+    workflowId: `competitor-research:${input.job_id}`,
+    args: [input],
+  });
+  log.info("started competitor research workflow", {
+    workflow_id: handle.workflowId,
+    job_id: input.job_id,
+  });
+  return handle.workflowId;
+}
+
+/** Test hook to replace client factory. */
+export function resetTemporalClientForTests(): void {
+  clientPromise = undefined;
+}
+
+export type StartWorkflowFn = typeof startCompetitorResearchWorkflow;
+
+let startFn: StartWorkflowFn = startCompetitorResearchWorkflow;
+
+export function setStartCompetitorResearchWorkflowForTests(fn: StartWorkflowFn | undefined): void {
+  startFn = fn ?? startCompetitorResearchWorkflow;
+}
+
+export async function enqueueCompetitorResearch(input: {
+  job_id: string;
+  product_name: string;
+  product_url?: string;
+}): Promise<string> {
+  return startFn(input);
+}

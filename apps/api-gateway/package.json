@@ -1,0 +1,33 @@
+{
+  "name": "@founderforge/api-gateway",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "clean": "rm -rf dist",
+    "test": "node --import tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@founderforge/db": "workspace:*",
+    "@founderforge/observability": "workspace:*",
+    "@founderforge/payments-okx": "workspace:*",
+    "@founderforge/schemas": "workspace:*",
+    "@temporalio/client": "^1.11.8",
+    "express": "^5.1.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/express-serve-static-core": "^5.1.2",
+    "@types/node": "^22.15.30",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
