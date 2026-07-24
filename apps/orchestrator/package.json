@@ -1,0 +1,30 @@
+{
+  "name": "@founderforge/orchestrator",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/worker.ts",
+    "start": "node dist/worker.js",
+    "clean": "rm -rf dist",
+    "test": "node --import tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@founderforge/competitor-research-service": "workspace:*",
+    "@founderforge/db": "workspace:*",
+    "@founderforge/observability": "workspace:*",
+    "@founderforge/schemas": "workspace:*",
+    "@temporalio/activity": "^1.11.8",
+    "@temporalio/client": "^1.11.8",
+    "@temporalio/worker": "^1.11.8",
+    "@temporalio/workflow": "^1.11.8"
+  },
+  "devDependencies": {
+    "@temporalio/testing": "^1.11.8",
+    "@types/node": "^22.15.30",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
