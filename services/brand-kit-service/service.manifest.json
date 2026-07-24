@@ -1,0 +1,8 @@
+{
+  "name": "brand-kit",
+  "version": "0.0.1",
+  "a2mcp_price_usd": 3.99,
+  "endpoint_path": "/v1/services/brand-kit/jobs",
+  "sla_minutes": 15,
+  "required_scopes": []
+}

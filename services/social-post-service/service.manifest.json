@@ -1,0 +1,8 @@
+{
+  "name": "social-post",
+  "version": "0.0.1",
+  "a2mcp_price_usd": 0.99,
+  "endpoint_path": "/v1/services/social-post/jobs",
+  "sla_minutes": 5,
+  "required_scopes": []
+}
