@@ -1,0 +1,14 @@
+{
+  "name": "@founderforge/service-template",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'service-template is documentation-only'",
+    "typecheck": "echo 'service-template is documentation-only'",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

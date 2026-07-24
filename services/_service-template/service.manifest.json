@@ -1,0 +1,8 @@
+{
+  "name": "example",
+  "version": "0.0.1",
+  "a2mcp_price_usd": 1.0,
+  "endpoint_path": "/v1/services/example/jobs",
+  "sla_minutes": 10,
+  "required_scopes": []
+}
