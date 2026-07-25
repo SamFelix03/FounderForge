@@ -4,6 +4,7 @@ import {
   enqueueAutomatedProductDemo,
   enqueueCompetitorResearch,
   enqueuePromoVideo,
+  enqueueSocialListening,
 } from "../temporal/client.js";
 
 const log = createLogger("dispatch");
@@ -75,6 +76,31 @@ export async function dispatchJob(jobId: string): Promise<void> {
           duration: input.duration,
           resolution: input.resolution,
           max_pages: input.max_pages,
+        });
+        log.info("job enqueued on Temporal", { job_id: jobId, service: job.service });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await jobStore.setStatus(jobId, "failed", `temporal_enqueue_failed:${message}`);
+        log.error("failed to enqueue Temporal workflow", { job_id: jobId, error: message });
+      }
+      break;
+    }
+    case "social-listening": {
+      const input = job.input as {
+        product_url: string;
+        live?: boolean;
+        max_posts?: number;
+      };
+      if (!input.product_url) {
+        await jobStore.setStatus(jobId, "failed", "missing product_url");
+        return;
+      }
+      try {
+        await enqueueSocialListening({
+          job_id: jobId,
+          product_url: input.product_url,
+          live: input.live,
+          max_posts: input.max_posts,
         });
         log.info("job enqueued on Temporal", { job_id: jobId, service: job.service });
       } catch (err) {
