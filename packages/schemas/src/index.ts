@@ -86,6 +86,25 @@ export type AutomatedProductDemoInput = z.infer<
   typeof AutomatedProductDemoInputSchema
 >;
 
+/** Seedance-supported durations used by promo-video (default 15s). */
+export const PromoVideoDurationSchema = z.union([
+  z.literal(4),
+  z.literal(5),
+  z.literal(6),
+  z.literal(8),
+  z.literal(10),
+  z.literal(12),
+  z.literal(15),
+]);
+
+export const PromoVideoInputSchema = z.object({
+  product_url: z.string().url(),
+  duration: PromoVideoDurationSchema.default(15),
+  resolution: z.enum(["480p", "720p", "1080p", "4k"]).default("720p"),
+  max_pages: z.number().int().min(1).max(9).default(6),
+});
+export type PromoVideoInput = z.infer<typeof PromoVideoInputSchema>;
+
 export const SERVICE_MANIFESTS = {
   "promo-video": {
     name: "promo-video",
