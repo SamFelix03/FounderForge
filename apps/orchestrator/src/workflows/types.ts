@@ -40,3 +40,18 @@ export interface PromoVideoWorkflowResult {
   concept?: string;
   cost_breakdown: CostLine[];
 }
+
+export interface SocialListeningWorkflowInput {
+  job_id: string;
+  product_url: string;
+  live?: boolean;
+  max_posts?: number;
+}
+
+export interface SocialListeningWorkflowResult {
+  product_name: string;
+  posted_urls: string[];
+  posts_attempted: number;
+  live: boolean;
+  cost_breakdown: CostLine[];
+}
