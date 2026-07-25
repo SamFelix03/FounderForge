@@ -1,5 +1,6 @@
 import { Router, type Router as ExpressRouter } from "express";
 import {
+  AutomatedProductDemoInputSchema,
   CompetitorResearchInputSchema,
   CreateJobRequestSchema,
   SERVICE_MANIFESTS,
@@ -16,6 +17,8 @@ function validateServiceInput(service: ServiceName, input: Record<string, unknow
   switch (service) {
     case "competitor-research":
       return CompetitorResearchInputSchema.safeParse(input);
+    case "automated-product-demo":
+      return AutomatedProductDemoInputSchema.safeParse(input);
     default:
       return { success: true as const, data: input };
   }
