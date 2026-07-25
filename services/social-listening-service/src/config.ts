@@ -67,3 +67,11 @@ export function redditProfileDir(): string {
   }
   return path.join(projectRoot(), ".reddit-profile");
 }
+
+export function groqModel(): string {
+  return (
+    envOr("GROQ_MODEL") ||
+    envOr("GROQ_MODEL_BALANCED") ||
+    "openai/gpt-oss-120b"
+  );
+}

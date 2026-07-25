@@ -87,11 +87,14 @@ async function postViaLegacyApi(
   text: string,
 ): Promise<{ ok: boolean; permalink?: string; error?: string }> {
   const result = await page.evaluate(
-    async ({ thingId: tid, text: bodyText }) => {
+    async ({ thingId: tid, text: bodyText }: { thingId: string; text: string }) => {
+      const cookie =
+        (globalThis as unknown as { document?: { cookie?: string } }).document
+          ?.cookie || "";
       const csrf =
-        document.cookie
+        cookie
           .split("; ")
-          .find((c) => c.startsWith("csrf_token="))
+          .find((c: string) => c.startsWith("csrf_token="))
           ?.split("=")[1] || "";
       const params = new URLSearchParams({
         thing_id: tid,
