@@ -39,7 +39,7 @@ Each service follows the same shape: `schema.ts`, `pipeline.ts`, `pricing.ts`, `
 | `competitor-research-service/` | **Feature 5 — fully implemented** (agents, PDF report, storage, live/batch scripts) |
 | `brand-kit-service/` | Feature scaffold |
 | `outreach-service/` | Feature scaffold |
-| `promo-video-service/` | Feature scaffold |
+| `promo-video-service/` | **Promo video — fully implemented** (Firecrawl + Gemini + Seedance → Segmind MP4 URL) |
 | `automated-product-demo-service/` | **Automated product demo — fully implemented** (Firecrawl + Gemini + Deepgram → MP4) |
 | `social-listening-service/` | Feature scaffold |
 | `social-post-service/` | Feature scaffold |
@@ -118,6 +118,20 @@ Supporting: `agents/fetchEvidence.ts` (shared page gather), `report/template.ts`
 ### Flow (short)
 
 `POST job` → API → Postgres job + Temporal start → find → evidence (Jina) → features → pricing → positioning → PDF upload → signed URL on job complete.
+
+---
+
+## Promo Video
+
+**Service:** `services/promo-video-service/`  
+**Workflow:** `apps/orchestrator` → `promoVideoWorkflow`  
+**Endpoint:** `POST /v1/services/promo-video/jobs`  
+**Contract:** `docs/feature-contracts/feature-promo-video.md`  
+**Defaults:** 15s / 720p; artifact is Segmind URL (images only on Supabase `demoforge/images`).
+
+### Flow (short)
+
+`POST job` → API validate → Postgres + Temporal → discover → screenshots → image upload → Gemini script → Seedance → Segmind `video` artifact.
 
 ---
 
