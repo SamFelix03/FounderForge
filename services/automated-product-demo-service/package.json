@@ -16,6 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "test": "echo \"no tests yet\"",
+    "live": "tsx src/scripts/live-run.ts",
     "postinstall": "playwright install chromium || true"
   },
   "dependencies": {
