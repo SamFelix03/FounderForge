@@ -12,3 +12,4 @@ export {
   compileReportActivity,
 } from "./agents.js";
 export { runAutomatedProductDemoActivity } from "./automatedProductDemo.js";
+export { runPromoVideoActivity } from "./promoVideo.js";
