@@ -1,6 +1,6 @@
 {
   "name": "@founderforge/social-listening-service",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
-    "test": "echo \"no tests yet\""
+    "test": "echo \"no tests yet\"",
+    "live": "tsx src/scripts/live-run.ts"
   },
   "dependencies": {
     "@founderforge/schemas": "workspace:*",
@@ -23,9 +24,15 @@
     "@founderforge/connectors": "workspace:*",
     "@founderforge/llm-core": "workspace:*",
     "@founderforge/policy": "workspace:*",
+    "@xenova/transformers": "^2.17.2",
+    "chalk": "^5.4.1",
+    "dotenv": "^16.5.0",
+    "playwright": "^1.62.0",
+    "proxy-chain": "^3.0.0",
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@types/node": "^22.15.30",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   }

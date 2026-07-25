@@ -1,8 +1,8 @@
 {
   "name": "social-listening",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "a2mcp_price_usd": 1.99,
   "endpoint_path": "/v1/services/social-listening/jobs",
-  "sla_minutes": 10,
+  "sla_minutes": 15,
   "required_scopes": []
 }
