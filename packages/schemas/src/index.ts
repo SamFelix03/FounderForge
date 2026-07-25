@@ -78,6 +78,14 @@ export const CompetitorResearchInputSchema = z.object({
 });
 export type CompetitorResearchInput = z.infer<typeof CompetitorResearchInputSchema>;
 
+export const AutomatedProductDemoInputSchema = z.object({
+  website_url: z.string().url(),
+  script: z.string().min(1),
+});
+export type AutomatedProductDemoInput = z.infer<
+  typeof AutomatedProductDemoInputSchema
+>;
+
 export const SERVICE_MANIFESTS = {
   "promo-video": {
     name: "promo-video",

@@ -1,8 +1,9 @@
 {
   "name": "automated-product-demo",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "a2mcp_price_usd": 4.99,
   "endpoint_path": "/v1/services/automated-product-demo/jobs",
   "sla_minutes": 30,
-  "required_scopes": []
+  "required_scopes": [],
+  "notes": "Input: website_url + script → narrated MP4 via Firecrawl/Gemini/Deepgram/ffmpeg"
 }
