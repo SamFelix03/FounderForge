@@ -24,3 +24,19 @@ export interface AutomatedProductDemoWorkflowResult {
   duration_seconds?: number;
   cost_breakdown: CostLine[];
 }
+
+export interface PromoVideoWorkflowInput {
+  job_id: string;
+  product_url: string;
+  duration?: number;
+  resolution?: string;
+  max_pages?: number;
+}
+
+export interface PromoVideoWorkflowResult {
+  video_url: string;
+  request_id?: string;
+  duration_seconds: number;
+  concept?: string;
+  cost_breakdown: CostLine[];
+}
