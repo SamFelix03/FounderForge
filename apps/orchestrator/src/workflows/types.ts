@@ -11,3 +11,16 @@ export interface CompetitorResearchWorkflowResult {
   object_key?: string;
   cost_breakdown: CostLine[];
 }
+
+export interface AutomatedProductDemoWorkflowInput {
+  job_id: string;
+  website_url: string;
+  script: string;
+}
+
+export interface AutomatedProductDemoWorkflowResult {
+  video_url: string;
+  object_key?: string;
+  duration_seconds?: number;
+  cost_breakdown: CostLine[];
+}
