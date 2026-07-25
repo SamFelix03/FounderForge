@@ -35,7 +35,7 @@ export async function runAutomatedProductDemoActivity(args: {
     const result = await runPipeline(
       { website_url: args.website_url, script: args.script },
       {
-        onStep: async (step) => {
+        onStep: async (step: string) => {
           await setJobStep(args.job_id, step);
           heartbeat({ phase: step });
         },

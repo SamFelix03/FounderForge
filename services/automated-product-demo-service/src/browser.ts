@@ -186,7 +186,7 @@ export class BrowserExecutor {
           log.warn(`${label} retry`, { attempt: i, attempts, delayMs });
           await sleep(delayMs);
         }
-        return (await this.app.interact(this.scrapeId, { prompt })) as Record<
+        return (await this.app.interact(this.scrapeId, { prompt })) as unknown as Record<
           string,
           unknown
         >;
@@ -345,7 +345,7 @@ export class BrowserExecutor {
 
     log.info("stopInteraction", { scrapeId: this.scrapeId });
     try {
-      const result = (await this.app.stopInteraction(this.scrapeId)) as Record<
+      const result = (await this.app.stopInteraction(this.scrapeId)) as unknown as Record<
         string,
         unknown
       >;

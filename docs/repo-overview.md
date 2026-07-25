@@ -40,7 +40,7 @@ Each service follows the same shape: `schema.ts`, `pipeline.ts`, `pricing.ts`, `
 | `brand-kit-service/` | Feature scaffold |
 | `outreach-service/` | Feature scaffold |
 | `promo-video-service/` | Feature scaffold |
-| `automated-product-demo-service/` | Automated product demo (URL + script → narrated video) |
+| `automated-product-demo-service/` | **Automated product demo — fully implemented** (Firecrawl + Gemini + Deepgram → MP4) |
 | `social-listening-service/` | Feature scaffold |
 | `social-post-service/` | Feature scaffold |
 | `_service-template/` | Copy-paste starter for new services |
@@ -118,3 +118,28 @@ Supporting: `agents/fetchEvidence.ts` (shared page gather), `report/template.ts`
 ### Flow (short)
 
 `POST job` → API → Postgres job + Temporal start → find → evidence (Jina) → features → pricing → positioning → PDF upload → signed URL on job complete.
+
+---
+
+## Automated Product Demo
+
+**Service:** `services/automated-product-demo-service/`  
+**Workflow:** `apps/orchestrator` → `automatedProductDemoWorkflow`  
+**Endpoint:** `POST /v1/services/automated-product-demo/jobs`  
+**Contract / runbook:** `docs/feature-contracts/feature-automated-product-demo.md`, `docs/runbooks/automated-product-demo.md`
+
+### Pipeline phases
+
+| Phase | Module | Does |
+|---|---|---|
+| plan | `planner.ts` | Gemini → atomic Firecrawl steps + narration drafts |
+| record | `browser.ts` | Scrape → warm-up → CDP screencast → interact → close session |
+| narrate | `narrator.ts` + `tts.ts` | Grounded lines (Gemini) + Deepgram Aura WAV |
+| assemble | `assemble.ts` + `media.ts` | ffmpeg pad/mux/concat (even-dimension scale) |
+| upload | `storage.ts` | Supabase Storage REST → public/signed `video_url` |
+
+`pipeline.ts` orchestrates all phases under `os.tmpdir()` (deleted in `finally`). Temporal uses one 30-minute activity with `setJobStep` around phases.
+
+### Flow (short)
+
+`POST job` → API validate → Postgres + Temporal → `runPipeline` → Supabase video URL on job complete.
