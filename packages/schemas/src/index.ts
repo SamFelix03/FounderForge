@@ -130,7 +130,7 @@ export const SERVICE_MANIFESTS = {
     name: "social-listening",
     a2mcp_price_usd: 1.99,
     endpoint_path: "/v1/services/social-listening/jobs",
-    sla_minutes: 10,
+    sla_minutes: 15,
   },
   outreach: {
     name: "outreach",
