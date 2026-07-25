@@ -15,6 +15,7 @@
     "@founderforge/automated-product-demo-service": "workspace:*",
     "@founderforge/competitor-research-service": "workspace:*",
     "@founderforge/promo-video-service": "workspace:*",
+    "@founderforge/social-listening-service": "workspace:*",
     "@founderforge/db": "workspace:*",
     "@founderforge/observability": "workspace:*",
     "@founderforge/schemas": "workspace:*",
