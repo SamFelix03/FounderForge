@@ -1,6 +1,7 @@
 {
   "name": "promo-video",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Website → Firecrawl screenshots → Gemini script → Segmind Seedance promo MP4 (defaults 15s / 720p)",
   "a2mcp_price_usd": 2.99,
   "endpoint_path": "/v1/services/promo-video/jobs",
   "sla_minutes": 15,
