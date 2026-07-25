@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, type Browser, type CDPSession } from "playwright";
-import Firecrawl from "firecrawl";
+import { Firecrawl } from "firecrawl";
 import { createLogger } from "@founderforge/observability";
 import { pick, sleep, truncate } from "./util.js";
 
