@@ -3,6 +3,7 @@ import {
   AutomatedProductDemoInputSchema,
   CompetitorResearchInputSchema,
   CreateJobRequestSchema,
+  PromoVideoInputSchema,
   SERVICE_MANIFESTS,
   ServiceNameSchema,
   type ServiceName,
@@ -19,6 +20,8 @@ function validateServiceInput(service: ServiceName, input: Record<string, unknow
       return CompetitorResearchInputSchema.safeParse(input);
     case "automated-product-demo":
       return AutomatedProductDemoInputSchema.safeParse(input);
+    case "promo-video":
+      return PromoVideoInputSchema.safeParse(input);
     default:
       return { success: true as const, data: input };
   }

@@ -3,6 +3,7 @@ import { jobStore } from "./store.js";
 import {
   enqueueAutomatedProductDemo,
   enqueueCompetitorResearch,
+  enqueuePromoVideo,
 } from "../temporal/client.js";
 
 const log = createLogger("dispatch");
@@ -47,6 +48,33 @@ export async function dispatchJob(jobId: string): Promise<void> {
           job_id: jobId,
           website_url: input.website_url,
           script: input.script,
+        });
+        log.info("job enqueued on Temporal", { job_id: jobId, service: job.service });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await jobStore.setStatus(jobId, "failed", `temporal_enqueue_failed:${message}`);
+        log.error("failed to enqueue Temporal workflow", { job_id: jobId, error: message });
+      }
+      break;
+    }
+    case "promo-video": {
+      const input = job.input as {
+        product_url: string;
+        duration?: number;
+        resolution?: string;
+        max_pages?: number;
+      };
+      if (!input.product_url) {
+        await jobStore.setStatus(jobId, "failed", "missing product_url");
+        return;
+      }
+      try {
+        await enqueuePromoVideo({
+          job_id: jobId,
+          product_url: input.product_url,
+          duration: input.duration,
+          resolution: input.resolution,
+          max_pages: input.max_pages,
         });
         log.info("job enqueued on Temporal", { job_id: jobId, service: job.service });
       } catch (err) {

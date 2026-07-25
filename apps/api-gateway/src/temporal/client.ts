@@ -102,3 +102,44 @@ export async function enqueueAutomatedProductDemo(input: {
 }): Promise<string> {
   return startApdFn(input);
 }
+
+export async function startPromoVideoWorkflow(input: {
+  job_id: string;
+  product_url: string;
+  duration?: number;
+  resolution?: string;
+  max_pages?: number;
+}): Promise<string> {
+  const client = await getTemporalClient();
+  const { taskQueue } = temporalConfig();
+  const handle = await client.workflow.start("promoVideoWorkflow", {
+    taskQueue,
+    workflowId: `promo-video:${input.job_id}`,
+    args: [input],
+  });
+  log.info("started promo video workflow", {
+    workflow_id: handle.workflowId,
+    job_id: input.job_id,
+  });
+  return handle.workflowId;
+}
+
+export type StartPromoVideoFn = typeof startPromoVideoWorkflow;
+
+let startPromoFn: StartPromoVideoFn = startPromoVideoWorkflow;
+
+export function setStartPromoVideoWorkflowForTests(
+  fn: StartPromoVideoFn | undefined,
+): void {
+  startPromoFn = fn ?? startPromoVideoWorkflow;
+}
+
+export async function enqueuePromoVideo(input: {
+  job_id: string;
+  product_url: string;
+  duration?: number;
+  resolution?: string;
+  max_pages?: number;
+}): Promise<string> {
+  return startPromoFn(input);
+}
