@@ -37,14 +37,17 @@ export interface ScreenshotCapture {
 
 export interface PromoScript {
   concept: string;
+  big_idea: string;
   tone: string;
   voiceover: string;
   shot_list: Array<{
     start_s: number;
     end_s: number;
+    shot_type: "cinematic" | "product_proof";
     visual: string;
     image_refs: string[];
     voiceover_slice?: string;
+    sound_notes?: string;
   }>;
   seedance_prompt: string;
 }
