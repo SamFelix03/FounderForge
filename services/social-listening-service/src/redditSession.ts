@@ -1,15 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { envInt, envOr } from "./config.js";
+import { envInt, envOr, projectRoot } from "./config.js";
 import { createLogger } from "./log.js";
 import { refreshTokenViaPlaywright } from "./redditSessionRefresh.js";
 
 const log = createLogger("reddit.session");
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const COOKIES_FILE = path.join(root, "scripts", "reddit-session.cookies.json");
-
+const root = projectRoot();
+function cookiesPath(): string {
+  const override = envOr("REDDIT_SESSION_COOKIES_PATH");
+  if (override) {
+    return path.isAbsolute(override) ? override : path.join(root, override);
+  }
+  return path.join(root, "scripts", "reddit-session.cookies.json");
+}
+const COOKIES_FILE = cookiesPath();
 export interface RedditSessionCookies {
   token_v2?: string;
   reddit_session?: string;

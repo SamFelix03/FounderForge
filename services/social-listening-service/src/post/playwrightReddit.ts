@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, type BrowserContext, type Page } from "playwright";
-import { envOr, projectRoot } from "../config.js";
+import { envOr, projectRoot, redditProfileDir } from "../config.js";
 import { createLogger } from "../log.js";
 import {
   hasLoggedInRedditSession,
@@ -19,7 +19,7 @@ import {
 const log = createLogger("post.playwright");
 
 const root = projectRoot();
-const PROFILE_DIR = path.join(root, ".reddit-profile");
+const PROFILE_DIR = redditProfileDir();
 const ACTIVE_PROXY_FILE = path.join(root, "scripts", "active-proxy.txt");
 const PROXY_FILE = path.join(root, "scripts", "webshare-proxies.txt");
 

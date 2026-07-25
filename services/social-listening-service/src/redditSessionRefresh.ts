@@ -8,13 +8,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, type BrowserContext } from "playwright";
-import { envOr, projectRoot } from "./config.js";
+import { envOr, projectRoot, redditProfileDir } from "./config.js";
 import { createLogger } from "./log.js";
 
 const log = createLogger("reddit.session.refresh");
 
 const root = projectRoot();
-const PROFILE_DIR = path.join(root, ".reddit-profile");
+const PROFILE_DIR = redditProfileDir();
 const COOKIES_FILE = path.join(root, "scripts", "reddit-session.cookies.json");
 const ACTIVE_PROXY_FILE = path.join(root, "scripts", "active-proxy.txt");
 const PROXY_FILE = path.join(root, "scripts", "webshare-proxies.txt");

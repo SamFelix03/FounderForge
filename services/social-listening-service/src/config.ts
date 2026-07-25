@@ -60,10 +60,10 @@ export function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-export function groqModel(): string {
-  return (
-    envOr("GROQ_MODEL") ||
-    envOr("GROQ_MODEL_BALANCED") ||
-    "openai/gpt-oss-120b"
-  );
+export function redditProfileDir(): string {
+  const override = envOr("REDDIT_PROFILE_DIR");
+  if (override) {
+    return path.isAbsolute(override) ? override : path.join(projectRoot(), override);
+  }
+  return path.join(projectRoot(), ".reddit-profile");
 }
