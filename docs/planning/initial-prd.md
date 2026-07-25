@@ -239,7 +239,7 @@ agent-services-platform/
 │
 ├── services/                       # one folder per product; identical internal shape
 │   ├── promo-video-service/
-│   ├── screen-recording-service/
+│   ├── automated-product-demo-service/
 │   ├── social-listening-service/
 │   ├── outreach-service/
 │   ├── competitor-research-service/  # FULL DETAIL IN PART 2

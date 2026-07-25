@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const ServiceNameSchema = z.enum([
   "promo-video",
-  "screen-recording",
+  "automated-product-demo",
   "social-listening",
   "outreach",
   "competitor-research",
@@ -85,10 +85,10 @@ export const SERVICE_MANIFESTS = {
     endpoint_path: "/v1/services/promo-video/jobs",
     sla_minutes: 15,
   },
-  "screen-recording": {
-    name: "screen-recording",
+  "automated-product-demo": {
+    name: "automated-product-demo",
     a2mcp_price_usd: 4.99,
-    endpoint_path: "/v1/services/screen-recording/jobs",
+    endpoint_path: "/v1/services/automated-product-demo/jobs",
     sla_minutes: 30,
   },
   "social-listening": {

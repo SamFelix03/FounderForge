@@ -3,7 +3,7 @@
 | Service | Price | SLA (minutes) |
 |---|---|---|
 | promo-video | $2.99 | 15 |
-| screen-recording | $4.99 | 30 |
+| automated-product-demo | $4.99 | 30 |
 | social-listening | $1.99 | 10 |
 | outreach | $2.49 | 15 |
 | competitor-research | $4.99 | 20 |

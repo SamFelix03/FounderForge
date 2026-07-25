@@ -40,7 +40,7 @@ Each service follows the same shape: `schema.ts`, `pipeline.ts`, `pricing.ts`, `
 | `brand-kit-service/` | Feature scaffold |
 | `outreach-service/` | Feature scaffold |
 | `promo-video-service/` | Feature scaffold |
-| `screen-recording-service/` | Feature scaffold |
+| `automated-product-demo-service/` | Automated product demo (URL + script → narrated video) |
 | `social-listening-service/` | Feature scaffold |
 | `social-post-service/` | Feature scaffold |
 | `_service-template/` | Copy-paste starter for new services |
