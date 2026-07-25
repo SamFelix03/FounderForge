@@ -13,12 +13,11 @@ import { makeEvent } from "./normalize.js";
 
 const log = createLogger("ingest.playwright.content");
 const root = projectRoot();
-const PROFILE_DIR = redditProfileDir();
 const ACTIVE_PROXY_FILE = path.join(root, "scripts", "active-proxy.txt");
 const PROXY_FILE = path.join(root, "scripts", "webshare-proxies.txt");
 
 export function canFetchRedditViaPlaywright(): boolean {
-  return fs.existsSync(PROFILE_DIR);
+  return fs.existsSync(redditProfileDir());
 }
 
 function loadProxy(): ParsedProxy | null {
@@ -61,7 +60,7 @@ async function openContext(): Promise<BrowserContext> {
     envOr("REDDIT_CONTENT_HEADED", "true").toLowerCase() !== "false" &&
     envOr("REDDIT_CONTENT_HEADED") !== "0";
 
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
+  const context = await chromium.launchPersistentContext(redditProfileDir(), {
     channel: "chrome",
     headless: !headed,
     viewport: { width: 1280, height: 900 },

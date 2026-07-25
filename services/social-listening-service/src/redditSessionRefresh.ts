@@ -14,11 +14,12 @@ import { createLogger } from "./log.js";
 const log = createLogger("reddit.session.refresh");
 
 const root = projectRoot();
-const PROFILE_DIR = redditProfileDir();
-const COOKIES_FILE = path.join(root, "scripts", "reddit-session.cookies.json");
 const ACTIVE_PROXY_FILE = path.join(root, "scripts", "active-proxy.txt");
 const PROXY_FILE = path.join(root, "scripts", "webshare-proxies.txt");
 
+function cookiesFile(): string {
+  return path.join(root, "scripts", "reddit-session.cookies.json");
+}
 export type ParsedProxy = {
   raw: string;
   server: string;
@@ -98,7 +99,7 @@ async function isBlocked(page: {
 
 async function saveCookies(context: BrowserContext): Promise<void> {
   const cookies = await context.cookies();
-  fs.writeFileSync(COOKIES_FILE, JSON.stringify(cookies, null, 2));
+  fs.writeFileSync(cookiesFile(), JSON.stringify(cookies, null, 2));
 }
 
 async function refreshOnce(
@@ -112,7 +113,7 @@ async function refreshOnce(
 
   let context: BrowserContext | undefined;
   try {
-    context = await chromium.launchPersistentContext(PROFILE_DIR, {
+    context = await chromium.launchPersistentContext(redditProfileDir(), {
       channel: "chrome",
       headless: !headed,
       viewport: { width: 1280, height: 900 },
@@ -178,7 +179,7 @@ async function refreshOnce(
 export async function refreshTokenViaPlaywright(
   _opts: { force?: boolean } = {},
 ): Promise<string> {
-  if (!fs.existsSync(PROFILE_DIR)) {
+  if (!fs.existsSync(redditProfileDir())) {
     throw new Error(
       "No .reddit-profile — run `npm run reddit:session` once to log in",
     );

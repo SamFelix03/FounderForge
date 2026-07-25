@@ -51,6 +51,7 @@ export async function ingestRedditViaCompound(
 
   // Persist for debugging / reuse (same shape as discover script)
   const outFile = path.join(root, "scripts", "discovered-threads.json");
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(
     outFile,
     JSON.stringify(

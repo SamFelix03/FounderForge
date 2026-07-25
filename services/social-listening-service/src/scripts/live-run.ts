@@ -8,8 +8,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRootEnv, createLogger } from "@founderforge/observability";
-import { runPipeline } from "../pipeline.js";
 
+// Load .env BEFORE importing pipeline modules (they read REDDIT_PROFILE_DIR etc.)
 loadRootEnv(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.."),
 );
@@ -57,12 +57,15 @@ Examples:
     process.exit(help ? 0 : 1);
   }
 
+  const { runPipeline } = await import("../pipeline.js");
+
   log.info("starting social listening", {
     product_url: url,
     live,
     max_posts: maxPosts ?? null,
     groq: Boolean(process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_1),
     rapidapi: Boolean(process.env.RAPIDAPI_KEY || process.env.REDDAPI_KEY),
+    profile: process.env.REDDIT_PROFILE_DIR || null,
   });
 
   if (!(process.env.GROQ_API_KEY || process.env.GROQ_API_KEY_1)) {

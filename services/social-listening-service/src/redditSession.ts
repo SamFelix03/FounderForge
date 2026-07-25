@@ -14,7 +14,6 @@ function cookiesPath(): string {
   }
   return path.join(root, "scripts", "reddit-session.cookies.json");
 }
-const COOKIES_FILE = cookiesPath();
 export interface RedditSessionCookies {
   token_v2?: string;
   reddit_session?: string;
@@ -25,6 +24,7 @@ export interface RedditSessionCookies {
 
 /** Load cookies saved by Playwright session / auto-refresh. */
 export function loadRedditSessionCookies(): RedditSessionCookies | null {
+  const COOKIES_FILE = cookiesPath();
   if (!fs.existsSync(COOKIES_FILE)) return null;
   try {
     const raw = JSON.parse(fs.readFileSync(COOKIES_FILE, "utf8")) as Array<{

@@ -19,7 +19,6 @@ import {
 const log = createLogger("post.playwright");
 
 const root = projectRoot();
-const PROFILE_DIR = redditProfileDir();
 const ACTIVE_PROXY_FILE = path.join(root, "scripts", "active-proxy.txt");
 const PROXY_FILE = path.join(root, "scripts", "webshare-proxies.txt");
 
@@ -57,7 +56,7 @@ function loadProxies(): ParsedProxy[] {
 
 export function canPostViaPlaywright(): boolean {
   return (
-    fs.existsSync(PROFILE_DIR) &&
+    fs.existsSync(redditProfileDir()) &&
     (hasLoggedInRedditSession() || Boolean(loadRedditSessionCookies()?.token_v2))
   );
 }
@@ -227,7 +226,7 @@ async function openContext(proxy: ParsedProxy | null): Promise<BrowserContext> {
   }
 
   const context = await chromium.launchPersistentContext(
-    PROFILE_DIR,
+    redditProfileDir(),
     launchOpts,
   );
   await context.addInitScript(() => {
