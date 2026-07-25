@@ -11,3 +11,4 @@ export {
   buildPositioningActivity,
   compileReportActivity,
 } from "./agents.js";
+export { runAutomatedProductDemoActivity } from "./automatedProductDemo.js";

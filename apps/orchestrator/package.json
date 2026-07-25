@@ -12,6 +12,7 @@
     "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
+    "@founderforge/automated-product-demo-service": "workspace:*",
     "@founderforge/competitor-research-service": "workspace:*",
     "@founderforge/db": "workspace:*",
     "@founderforge/observability": "workspace:*",
