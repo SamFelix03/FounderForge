@@ -57,7 +57,9 @@ Examples:
   if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
   if (!process.env.DEEPGRAM_API_KEY) throw new Error("DEEPGRAM_API_KEY missing");
   if (!supabaseConfigured()) {
-    throw new Error("Supabase Storage required (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)");
+    throw new Error(
+      "Demo Supabase Storage required (DEMO_SUPABASE_URL + DEMO_SUPABASE_SERVICE_ROLE_KEY)",
+    );
   }
 
   const started = Date.now();

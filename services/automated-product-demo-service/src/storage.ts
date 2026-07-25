@@ -72,28 +72,38 @@ async function createSignedUrl(
   return `${cfg.supabaseUrl.replace(/\/$/, "")}/storage/v1${signedPath.startsWith("/") ? "" : "/"}${signedPath}`;
 }
 
+/**
+ * Demo uploads use a separate Supabase project from competitor-research
+ * (`SUPABASE_*`). Prefer `DEMO_SUPABASE_*` only — never fall back to report storage.
+ */
 export function supabaseConfigured(): boolean {
   return Boolean(
-    process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+    process.env.DEMO_SUPABASE_URL?.trim() &&
+      process.env.DEMO_SUPABASE_SERVICE_ROLE_KEY?.trim(),
   );
 }
 
 export function loadDemoStorageConfigFromEnv(): DemoStorageConfig {
-  const supabaseUrl = process.env.SUPABASE_URL?.trim();
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const supabaseUrl = process.env.DEMO_SUPABASE_URL?.trim();
+  const supabaseServiceRoleKey = process.env.DEMO_SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
+    throw new Error(
+      "DEMO_SUPABASE_URL and DEMO_SUPABASE_SERVICE_ROLE_KEY are required (separate from competitor-research SUPABASE_*)",
+    );
   }
   const ttlRaw =
+    process.env.DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN?.trim() ||
     process.env.DEMO_URL_TTL_SECONDS?.trim() ||
-    process.env.REPORT_URL_TTL_SECONDS?.trim() ||
     "0";
   const ttl = Number.parseInt(ttlRaw, 10);
   return {
     supabaseUrl,
     supabaseServiceRoleKey,
-    supabaseBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "demos",
-    supabaseObjectPrefix: process.env.DEMO_OBJECT_PREFIX?.trim() || "demos",
+    supabaseBucket: process.env.DEMO_SUPABASE_STORAGE_BUCKET?.trim() || "demoforge",
+    supabaseObjectPrefix:
+      process.env.DEMO_SUPABASE_OBJECT_PREFIX?.trim() ||
+      process.env.DEMO_OBJECT_PREFIX?.trim() ||
+      "demos",
     supabaseSignedUrlExpiresIn: Number.isFinite(ttl) && ttl > 0 ? ttl : 0,
   };
 }
