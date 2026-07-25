@@ -143,3 +143,42 @@ export async function enqueuePromoVideo(input: {
 }): Promise<string> {
   return startPromoFn(input);
 }
+
+export async function startSocialListeningWorkflow(input: {
+  job_id: string;
+  product_url: string;
+  live?: boolean;
+  max_posts?: number;
+}): Promise<string> {
+  const client = await getTemporalClient();
+  const { taskQueue } = temporalConfig();
+  const handle = await client.workflow.start("socialListeningWorkflow", {
+    taskQueue,
+    workflowId: `social-listening:${input.job_id}`,
+    args: [input],
+  });
+  log.info("started social listening workflow", {
+    workflow_id: handle.workflowId,
+    job_id: input.job_id,
+  });
+  return handle.workflowId;
+}
+
+export type StartSocialListeningFn = typeof startSocialListeningWorkflow;
+
+let startSocialListeningFn: StartSocialListeningFn = startSocialListeningWorkflow;
+
+export function setStartSocialListeningWorkflowForTests(
+  fn: StartSocialListeningFn | undefined,
+): void {
+  startSocialListeningFn = fn ?? startSocialListeningWorkflow;
+}
+
+export async function enqueueSocialListening(input: {
+  job_id: string;
+  product_url: string;
+  live?: boolean;
+  max_posts?: number;
+}): Promise<string> {
+  return startSocialListeningFn(input);
+}
