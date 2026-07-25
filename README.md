@@ -40,6 +40,8 @@ With `PAYMENTS_BYPASS=true` (default in `env.example`), job create endpoints ski
 
 Feature 5 flow: `POST /v1/services/competitor-research/jobs` → Temporal workflow → poll `GET /v1/jobs/:id` for a Supabase signed PDF URL. Details in `docs/feature-5-competitor-research.md`.
 
+Social listening: `POST /v1/services/social-listening/jobs` with `{ "input": { "product_url": "…", "live": false } }` → Temporal → poll for `artifacts[].url` (posted / dry-run Reddit URLs). See `docs/feature-contracts/feature-social-listening.md`.
+
 ## Scripts
 
 | Command | Purpose |
