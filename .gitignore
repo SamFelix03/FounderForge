@@ -10,3 +10,4 @@ coverage/
 .playwright/
 artifacts/
 *.tsbuildinfo
+services/outreach-service/output/

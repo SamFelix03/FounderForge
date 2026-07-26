@@ -1,10 +1,8 @@
 /**
- * Compile outreach findings → HTML → PDF (Playwright), optional Supabase upload.
- * Mirrors FounderForge competitor-research compileReport pattern.
+ * Compile outreach findings → HTML → PDF (Playwright) → Supabase upload only.
+ * PDFs are never written under services/outreach-service/output.
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { buildReportHtml } from "./template.js";
 import { supabaseConfigured, uploadPdfBuffer } from "./storage.js";
 import { ensureChromiumInstalled } from "./ensureBrowsers.js";
@@ -43,19 +41,20 @@ function productLabelFromResult(result: {
 
 export async function compileOutreachReport(
   result: Record<string, unknown>,
-  opts: { outDir?: string; includeHtml?: boolean } = {},
+  opts: { includeHtml?: boolean } = {},
 ): Promise<{
   report: {
-    local_path: string;
-    pdf_url: string | null;
-    object_key: string | null;
+    pdf_url: string;
+    object_key: string;
     bytes: number;
     html_preview?: string;
   };
 }> {
   const generatedAt = new Date().toISOString();
   const html = buildReportHtml({ ...result, generatedAt });
-  const label = productLabelFromResult(result as { website?: { productSummary?: string; url?: string } });
+  const label = productLabelFromResult(
+    result as { website?: { productSummary?: string; url?: string } },
+  );
   const filename = `${safeSlug(label)}-outreach-${Date.now()}.pdf`;
 
   await ensureChromiumInstalled();
@@ -76,28 +75,20 @@ export async function compileOutreachReport(
     await browser.close();
   }
 
-  const outDir = opts.outDir || path.resolve(process.cwd(), "output");
-  await mkdir(outDir, { recursive: true });
-  const localPath = path.join(outDir, filename);
-  await writeFile(localPath, pdfBytes);
-
-  let pdfUrl: string | null = null;
-  let objectKey: string | null = null;
-  if (supabaseConfigured()) {
-    const uploaded = await uploadPdfBuffer(pdfBytes, { filename });
-    pdfUrl = uploaded.url;
-    objectKey = uploaded.object_key;
-  } else {
-    console.warn(
-      "  -> Supabase not configured (set OUTREACH_SUPABASE_URL + OUTREACH_SUPABASE_SERVICE_ROLE_KEY, or DEMO_SUPABASE_*)",
+  if (!supabaseConfigured()) {
+    throw new Error(
+      "Outreach PDF upload requires OUTREACH_SUPABASE_URL + OUTREACH_SUPABASE_SERVICE_ROLE_KEY (or DEMO_SUPABASE_*). Local output is disabled.",
     );
   }
 
+  const uploaded = await uploadPdfBuffer(pdfBytes, { filename });
+  console.log(`  -> PDF uploaded (${(pdfBytes.length / 1024).toFixed(1)} KB)`);
+  console.log(`  -> object: ${uploaded.object_key}`);
+
   return {
     report: {
-      local_path: localPath,
-      pdf_url: pdfUrl,
-      object_key: objectKey,
+      pdf_url: uploaded.url,
+      object_key: uploaded.object_key,
       bytes: pdfBytes.length,
       html_preview: opts.includeHtml ? html : undefined,
     },

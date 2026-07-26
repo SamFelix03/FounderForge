@@ -31,21 +31,18 @@ export async function outreachWorkflow(
       sheet_url: input.sheet_url,
     });
 
-    const artifacts = [];
-    if (result.pdf_url) {
-      artifacts.push({
+    if (!result.pdf_url) {
+      throw new Error("runOutreachActivity did not return pdf_url");
+    }
+
+    const artifacts = [
+      {
         type: "pdf_report",
         url: result.pdf_url,
         object_key: result.object_key,
         mime_type: "application/pdf",
-      });
-    } else if (result.local_path) {
-      artifacts.push({
-        type: "pdf_report",
-        path: result.local_path,
-        mime_type: "application/pdf",
-      });
-    }
+      },
+    ];
 
     await short.completeJob(input.job_id, {
       artifacts,

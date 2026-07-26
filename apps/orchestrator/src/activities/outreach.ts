@@ -13,8 +13,7 @@ export async function runOutreachActivity(args: {
   website_url: string;
   sheet_url: string;
 }): Promise<{
-  pdf_url?: string;
-  local_path?: string;
+  pdf_url: string;
   object_key?: string;
   cost_breakdown: Output["cost_breakdown"];
 }> {
@@ -45,9 +44,12 @@ export async function runOutreachActivity(args: {
       },
     );
 
+    if (!result.report.pdf_url) {
+      throw new Error("outreach pipeline did not return pdf_url");
+    }
+
     return {
       pdf_url: result.report.pdf_url,
-      local_path: result.report.local_path,
       object_key: result.report.object_key,
       cost_breakdown: result.cost_breakdown,
     };

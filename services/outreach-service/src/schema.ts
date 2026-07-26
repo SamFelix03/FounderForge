@@ -70,7 +70,6 @@ export const OutputSchema = z.object({
   }),
   report: z.object({
     pdf_url: z.string().url().optional(),
-    local_path: z.string().optional(),
     object_key: z.string().optional(),
     bytes: z.number().optional(),
   }),

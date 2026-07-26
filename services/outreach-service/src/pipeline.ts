@@ -159,21 +159,15 @@ export async function runPipeline(
   };
 
   await onStep?.({ step: "report" });
-  console.log("\n[Report] Compiling full findings PDF...");
+  console.log("\n[Report] Compiling full findings PDF (upload only, no local output)...");
   const compiled = await compileOutreachReport(result, { includeHtml: true });
   result.report = {
-    local_path: compiled.report.local_path,
-    ...(compiled.report.pdf_url ? { pdf_url: compiled.report.pdf_url } : {}),
-    ...(compiled.report.object_key ? { object_key: compiled.report.object_key } : {}),
+    pdf_url: compiled.report.pdf_url,
+    object_key: compiled.report.object_key,
     bytes: compiled.report.bytes,
   };
-  console.log(`  -> PDF written: ${compiled.report.local_path}`);
   console.log(`  -> size: ${(compiled.report.bytes / 1024).toFixed(1)} KB`);
-  if (compiled.report.pdf_url) {
-    console.log(`\n[Report URL]\n${compiled.report.pdf_url}\n`);
-  } else {
-    console.log("  -> no Supabase URL (upload not configured or failed)");
-  }
+  console.log(`\n[Report URL]\n${compiled.report.pdf_url}\n`);
 
   return result;
 }

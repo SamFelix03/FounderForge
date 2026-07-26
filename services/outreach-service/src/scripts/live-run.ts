@@ -98,7 +98,6 @@ Examples:
     investor_count: result.investors.exaResultCount,
     contact_count: result.partnerContacts.contacts.length,
     pdf_url: result.report.pdf_url ?? null,
-    local_path: result.report.local_path ?? null,
     object_key: result.report.object_key ?? null,
     bytes: result.report.bytes ?? null,
   };
@@ -109,8 +108,6 @@ Examples:
   console.log(JSON.stringify(summary, null, 2));
   if (result.report.pdf_url) {
     console.log(`\nReport URL:\n${result.report.pdf_url}`);
-  } else if (result.report.local_path) {
-    console.log(`\nLocal PDF:\n${result.report.local_path}`);
   }
 }
 
