@@ -4,6 +4,7 @@ import {
   CompetitorResearchInputSchema,
   CreateJobRequestSchema,
   OutreachInputSchema,
+  BrandKitInputSchema,
   SERVICE_MANIFESTS,
   ServiceNameSchema,
 } from "./index.js";
@@ -23,6 +24,15 @@ describe("schemas", () => {
       sheet_url: "https://cdn.example/revenue.xlsx",
     });
     assert.equal(parsed.website_url, "https://acme.example");
+  });
+
+  it("parses brand kit input", () => {
+    const parsed = BrandKitInputSchema.parse({
+      brand_name: "Acme",
+      description: "calm productivity tools for makers",
+    });
+    assert.equal(parsed.brand_name, "Acme");
+    assert.equal(parsed.pick, 0);
   });
 
   it("lists all seven services", () => {

@@ -121,6 +121,14 @@ export const OutreachInputSchema = z.object({
 });
 export type OutreachInput = z.infer<typeof OutreachInputSchema>;
 
+/** Brand kit — name + brief → zipped logo/assets/fonts kit. */
+export const BrandKitInputSchema = z.object({
+  brand_name: z.string().min(1).max(80),
+  description: z.string().min(10).max(2000),
+  pick: z.number().int().min(0).max(5).default(0),
+});
+export type BrandKitInput = z.infer<typeof BrandKitInputSchema>;
+
 export const SERVICE_MANIFESTS = {
   "promo-video": {
     name: "promo-video",
