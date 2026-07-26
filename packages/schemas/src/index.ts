@@ -113,6 +113,14 @@ export const SocialListeningInputSchema = z.object({
 });
 export type SocialListeningInput = z.infer<typeof SocialListeningInputSchema>;
 
+/** Outreach — website + revenue sheet → investor PDF report. */
+export const OutreachInputSchema = z.object({
+  website_url: z.string().url(),
+  /** Public URL to an .xlsx/.xls/.csv workbook downloaded at runtime. */
+  sheet_url: z.string().url(),
+});
+export type OutreachInput = z.infer<typeof OutreachInputSchema>;
+
 export const SERVICE_MANIFESTS = {
   "promo-video": {
     name: "promo-video",

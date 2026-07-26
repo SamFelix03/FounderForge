@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CompetitorResearchInputSchema,
   CreateJobRequestSchema,
+  OutreachInputSchema,
   SERVICE_MANIFESTS,
   ServiceNameSchema,
 } from "./index.js";
@@ -14,6 +15,14 @@ describe("schemas", () => {
       product_url: "https://acme.example",
     });
     assert.equal(parsed.product_name, "Acme");
+  });
+
+  it("parses outreach input", () => {
+    const parsed = OutreachInputSchema.parse({
+      website_url: "https://acme.example",
+      sheet_url: "https://cdn.example/revenue.xlsx",
+    });
+    assert.equal(parsed.website_url, "https://acme.example");
   });
 
   it("lists all seven services", () => {
