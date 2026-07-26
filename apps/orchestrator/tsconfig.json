@@ -14,6 +14,7 @@
     { "path": "../../services/competitor-research-service" },
     { "path": "../../services/automated-product-demo-service" },
     { "path": "../../services/promo-video-service" },
-    { "path": "../../services/social-listening-service" }
+    { "path": "../../services/social-listening-service" },
+    { "path": "../../services/outreach-service" }
   ]
 }

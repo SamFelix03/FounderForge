@@ -55,3 +55,15 @@ export interface SocialListeningWorkflowResult {
   live: boolean;
   cost_breakdown: CostLine[];
 }
+
+export interface OutreachWorkflowInput {
+  job_id: string;
+  website_url: string;
+  sheet_url: string;
+}
+
+export interface OutreachWorkflowResult {
+  pdf_url?: string;
+  object_key?: string;
+  cost_breakdown: CostLine[];
+}
