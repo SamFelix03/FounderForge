@@ -38,7 +38,7 @@ export async function runOutreachActivity(args: {
         sheet_url: args.sheet_url,
       },
       {
-        onStep: async (s) => {
+        onStep: async (s: { step: string; detail?: string }) => {
           await setJobStep(args.job_id, s.step);
           heartbeat({ phase: s.step, detail: s.detail });
         },
