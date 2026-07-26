@@ -6,6 +6,7 @@ import {
   enqueuePromoVideo,
   enqueueSocialListening,
   enqueueOutreach,
+  enqueueBrandKit,
 } from "../temporal/client.js";
 
 const log = createLogger("dispatch");
@@ -125,6 +126,31 @@ export async function dispatchJob(jobId: string): Promise<void> {
           job_id: jobId,
           website_url: input.website_url,
           sheet_url: input.sheet_url,
+        });
+        log.info("job enqueued on Temporal", { job_id: jobId, service: job.service });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await jobStore.setStatus(jobId, "failed", `temporal_enqueue_failed:${message}`);
+        log.error("failed to enqueue Temporal workflow", { job_id: jobId, error: message });
+      }
+      break;
+    }
+    case "brand-kit": {
+      const input = job.input as {
+        brand_name: string;
+        description: string;
+        pick?: number;
+      };
+      if (!input.brand_name || !input.description) {
+        await jobStore.setStatus(jobId, "failed", "missing brand_name or description");
+        return;
+      }
+      try {
+        await enqueueBrandKit({
+          job_id: jobId,
+          brand_name: input.brand_name,
+          description: input.description,
+          pick: input.pick,
         });
         log.info("job enqueued on Temporal", { job_id: jobId, service: job.service });
       } catch (err) {

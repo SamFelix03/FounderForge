@@ -6,6 +6,7 @@ import {
   PromoVideoInputSchema,
   SocialListeningInputSchema,
   OutreachInputSchema,
+  BrandKitInputSchema,
   SERVICE_MANIFESTS,
   ServiceNameSchema,
   type ServiceName,
@@ -28,6 +29,8 @@ function validateServiceInput(service: ServiceName, input: Record<string, unknow
       return SocialListeningInputSchema.safeParse(input);
     case "outreach":
       return OutreachInputSchema.safeParse(input);
+    case "brand-kit":
+      return BrandKitInputSchema.safeParse(input);
     default:
       return { success: true as const, data: input };
   }

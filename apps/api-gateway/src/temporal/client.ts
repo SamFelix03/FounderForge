@@ -219,3 +219,42 @@ export async function enqueueOutreach(input: {
 }): Promise<string> {
   return startOutreachFn(input);
 }
+
+export async function startBrandKitWorkflow(input: {
+  job_id: string;
+  brand_name: string;
+  description: string;
+  pick?: number;
+}): Promise<string> {
+  const client = await getTemporalClient();
+  const { taskQueue } = temporalConfig();
+  const handle = await client.workflow.start("brandKitWorkflow", {
+    taskQueue,
+    workflowId: `brand-kit:${input.job_id}`,
+    args: [input],
+  });
+  log.info("started brand kit workflow", {
+    workflow_id: handle.workflowId,
+    job_id: input.job_id,
+  });
+  return handle.workflowId;
+}
+
+export type StartBrandKitFn = typeof startBrandKitWorkflow;
+
+let startBrandKitFn: StartBrandKitFn = startBrandKitWorkflow;
+
+export function setStartBrandKitWorkflowForTests(
+  fn: StartBrandKitFn | undefined,
+): void {
+  startBrandKitFn = fn ?? startBrandKitWorkflow;
+}
+
+export async function enqueueBrandKit(input: {
+  job_id: string;
+  brand_name: string;
+  description: string;
+  pick?: number;
+}): Promise<string> {
+  return startBrandKitFn(input);
+}

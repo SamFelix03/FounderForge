@@ -44,6 +44,8 @@ Social listening: `POST /v1/services/social-listening/jobs` with `{ "input": { "
 
 Outreach: `POST /v1/services/outreach/jobs` with `{ "input": { "website_url": "…", "sheet_url": "…" } }` → Temporal → poll for PDF `artifacts[].url`. See `docs/feature-contracts/feature-outreach.md`.
 
+Brand kit: `POST /v1/services/brand-kit/jobs` with `{ "input": { "brand_name": "…", "description": "…" } }` → Temporal → poll for zip `artifacts[].url`. See `docs/feature-contracts/feature-brand-kit.md`.
+
 ## Scripts
 
 | Command | Purpose |
