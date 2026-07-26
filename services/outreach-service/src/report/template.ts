@@ -186,10 +186,12 @@ export function buildReportHtml(data) {
     table.data {
       width: 100%; border-collapse: collapse; font-size: 8.3pt;
       margin: 8px 0 6px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+      table-layout: fixed;
     }
     table.data th, table.data td {
       border-bottom: 1px solid var(--line); padding: 7px 8px;
       text-align: left; vertical-align: top;
+      overflow-wrap: anywhere; word-break: break-word;
     }
     table.data th {
       background: var(--teal-tint); color: var(--teal-deep);
@@ -198,7 +200,7 @@ export function buildReportHtml(data) {
     }
     table.data tr:last-child td { border-bottom: 0; }
     table.data tr:nth-child(even) td { background: #f8fbfa; }
-    table.data td.num { white-space: nowrap; font-weight: 700; color: var(--teal-deep); }
+    table.data td.num { font-weight: 700; color: var(--teal-deep); }
     table.data a { color: var(--teal-deep); text-decoration: none; font-weight: 600; }
     .tiny { font-size: 7.4pt; color: #4d616a; font-weight: 500; }
     .contact-links { display: grid; gap: 5px; }
@@ -379,7 +381,9 @@ function renderProductCard(bits: any, url: any) {
 }
 
 function renderPerformanceCard(bits: any) {
-  const metrics = bits.metrics || [];
+  const metrics = (bits.metrics || []).filter(
+    (m) => m?.label && isMeaningfulMetricValue(m.value),
+  );
   if (!metrics.length) {
     return `<p>${esc(cleanProse(bits.raw || 'No metrics extracted.'))}</p>`;
   }
@@ -406,23 +410,23 @@ function renderInvestorTable(rows: any) {
 
 function renderBenchmarkTable(rows: any) {
   const showMetric = rows.some(
-    (r) =>
-      r.metricType &&
-      !String(r.preInvestmentRevenue).toLowerCase().includes(String(r.metricType).toLowerCase())
+    (r) => r.metricType && isShortMetricType(r.metricType) && r.metricType !== r.preInvestmentRevenue,
   );
   const body = rows
     .map((r) => {
-      const metricCell = showMetric ? `<td>${esc(r.metricType || '—')}</td>` : '';
+      const metricCell = showMetric
+        ? `<td style="width:18%">${esc(isShortMetricType(r.metricType) ? r.metricType : '—')}</td>`
+        : '';
       return `<tr>
-      <td><strong>${esc(r.company)}</strong>${r.round ? `<div class="tiny">${esc(r.round)}</div>` : ''}</td>
-      <td>${esc(r.investor || '—')}</td>
-      <td class="num">${esc(r.preInvestmentRevenue)}</td>
+      <td style="width:24%"><strong>${esc(r.company)}</strong>${r.round ? `<div class="tiny">${esc(r.round)}</div>` : ''}</td>
+      <td style="width:24%">${esc(r.investor || '—')}</td>
+      <td style="width:${showMetric ? '34%' : '52%'}">${esc(r.preInvestmentRevenue)}</td>
       ${metricCell}
     </tr>`;
     })
     .join('');
-  const metricHead = showMetric ? '<th>Metric</th>' : '';
-  return `<table class="data"><thead><tr><th>Company</th><th>Investor</th><th>Pre-investment revenue</th>${metricHead}</tr></thead><tbody>${body}</tbody></table>`;
+  const metricHead = showMetric ? '<th style="width:18%">Metric</th>' : '';
+  return `<table class="data"><thead><tr><th style="width:24%">Company</th><th style="width:24%">Investor</th><th style="width:${showMetric ? '34%' : '52%'}">Pre-investment revenue</th>${metricHead}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function renderContactTable(rows: any) {
@@ -513,16 +517,42 @@ function normalizeInvestors(investors: any) {
 
 function normalizeBenchmarks(portfolio: any) {
   const structured = asObject(portfolio?.structuredOutput);
-  let rows = Array.isArray(structured?.benchmarks) ? structured.benchmarks : [];
+  const nested = asObject(structured?.content);
+  let rows = Array.isArray(structured?.benchmarks)
+    ? structured.benchmarks
+    : Array.isArray(nested?.benchmarks)
+      ? nested.benchmarks
+      : [];
   if (!rows.length) rows = parseBenchmarksFromMarkdown(portfolio?.portfolioRevenueSummary);
   return rows
-    .map((r) => ({
-      company: cleanCell(r.company || r.name),
-      investor: cleanCell(r.investor || r.firm || ''),
-      round: cleanCell(r.round || r.stage || ''),
-      preInvestmentRevenue: cleanCell(r.preInvestmentRevenue || r.revenue || r.arr || r.mrr || ''),
-      metricType: cleanCell(r.metricType || r.metric || '')
-    }))
+    .map((r) => {
+      let company = cleanCell(r.company || r.name);
+      let investor = cleanCell(r.investor || r.firm || '');
+      let round = cleanCell(r.round || r.stage || r.timing || '');
+      let preInvestmentRevenue = cleanCell(
+        r.preInvestmentRevenue || r.revenue || r.arr || r.mrr || '',
+      );
+      let metricType = cleanCell(r.metricType || r.metric || '');
+
+      // If "revenue" is actually a date/timing, move it to round.
+      if (isDateLike(preInvestmentRevenue)) {
+        if (!round) round = preInvestmentRevenue;
+        preInvestmentRevenue = '';
+      }
+      // Long prose in metricType belongs in the revenue cell when revenue is empty.
+      if (!preInvestmentRevenue && metricType && !isShortMetricType(metricType)) {
+        preInvestmentRevenue = metricType;
+        metricType = '';
+      }
+      // Drop long metric prose when revenue already exists; keep only a short type label.
+      if (preInvestmentRevenue && metricType && !isShortMetricType(metricType)) {
+        metricType =
+          guessMetricType(preInvestmentRevenue) || guessMetricType(metricType) || '';
+      }
+      if (!metricType) metricType = guessMetricType(preInvestmentRevenue);
+
+      return { company, investor, round, preInvestmentRevenue, metricType };
+    })
     .filter((r) => r.company && r.preInvestmentRevenue)
     .slice(0, 25);
 }
@@ -612,25 +642,27 @@ function parsePerformance(text: any) {
   const raw = String(text || '').trim();
   const metrics = [];
   const patterns = [
-    [/\bARR\b[^$0-9]{0,20}(\$?[\d.,]+\s*[kmb]?)/i, 'ARR'],
-    [/\bMRR\b[^$0-9]{0,20}(\$?[\d.,]+\s*[kmb]?)/i, 'MRR'],
-    [/revenue[^$0-9]{0,20}(\$?[\d.,]+\s*[kmb]?)/i, 'Revenue'],
-    [/gross margin[^0-9%]{0,12}([\d.]+\s*%)/i, 'Gross margin'],
-    [/net.?margin[^0-9%]{0,12}([\d.]+\s*%)/i, 'Net margin'],
-    [/churn[^0-9%]{0,12}([\d.]+\s*%?)/i, 'Churn'],
-    [/customers?[^0-9]{0,12}([\d,]+)/i, 'Customers'],
-    [/growth[^0-9%]{0,16}([\d.]+\s*%[^.\n]*)/i, 'Growth']
+    [/\bARR\b[^$0-9]{0,20}(\$?\d[\d.,]*\s*[kmb]?)/i, 'ARR'],
+    [/\bMRR\b[^$0-9]{0,20}(\$?\d[\d.,]*\s*[kmb]?)/i, 'MRR'],
+    [/\brevenue\b[^$0-9]{0,20}(\$?\d[\d.,]*\s*[kmb]?)/i, 'Revenue'],
+    [/gross margin[^0-9%]{0,12}(\d[\d.]*\s*%)/i, 'Gross margin'],
+    [/net.?margin[^0-9%]{0,12}(\d[\d.]*\s*%)/i, 'Net margin'],
+    [/churn[^0-9%]{0,12}(\d[\d.]*\s*%?)/i, 'Churn'],
+    [/customers?[^0-9]{0,12}(\d[\d,]*)/i, 'Customers'],
+    [/growth[^0-9%]{0,16}(\d[\d.]*\s*%[^.\n]*)/i, 'Growth']
   ];
   for (const [re, label] of patterns) {
     const m = raw.match(re);
-    if (m?.[1]) metrics.push({ label, value: m[1].trim() });
+    if (m?.[1] && isMeaningfulMetricValue(m[1])) {
+      metrics.push({ label, value: m[1].trim() });
+    }
   }
   for (const line of raw.split('\n')) {
     const m = line.match(/^\s*[-*]?\s*\*?\*?([A-Za-z][A-Za-z /%]{1,24})\*?\*?\s*[:=]\s*(.+)$/);
     if (!m) continue;
     const label = stripMd(m[1]).trim();
     const value = stripMd(m[2]).trim();
-    if (!label || !value || value.length > 60) continue;
+    if (!label || !isMeaningfulMetricValue(value) || value.length > 60) continue;
     if (!metrics.some((x) => x.label.toLowerCase() === label.toLowerCase())) {
       metrics.push({ label, value });
     }
@@ -639,7 +671,11 @@ function parsePerformance(text: any) {
     .map((m) => stripMd(m[1]))
     .filter((n) => n && !/^(arr|mrr|revenue)\b/i.test(n))
     .slice(0, 5);
-  return { metrics: metrics.slice(0, 8), notes, raw };
+  return {
+    metrics: metrics.filter((m) => isMeaningfulMetricValue(m.value)).slice(0, 8),
+    notes,
+    raw,
+  };
 }
 
 function parseInvestorsFromMarkdown(summary: any) {
@@ -680,26 +716,133 @@ function parseInvestorsFromMarkdown(summary: any) {
 function parseBenchmarksFromMarkdown(summary: any) {
   const text = String(summary || '');
   const tableRows = [];
+  let headers: string[] = [];
   for (const line of text.split('\n')) {
-    if (!/\|/.test(line) || /^\s*\|?\s*-+/.test(line)) continue;
+    if (!/\|/.test(line) || /^\s*\|?\s*[-:| ]+\s*$/.test(line)) continue;
     const cells = line
       .split('|')
       .map((c) => stripMd(c).trim())
       .filter(Boolean);
     if (cells.length < 2) continue;
-    if (/^company|^name/i.test(cells[0])) continue;
+    if (isBenchmarkHeaderRow(cells)) {
+      headers = cells.map((c) => c.toLowerCase());
+      continue;
+    }
+    const idx = (names: string[]) =>
+      headers.findIndex((h) => names.some((n) => h.includes(n)));
+    const companyI = headers.length ? Math.max(0, idx(['company', 'name'])) : 0;
+    const investorI = headers.length ? idx(['investor', 'firm']) : 1;
+    const revenueI = headers.length
+      ? idx(['pre-investment', 'pre investment', 'revenue', 'arr', 'mrr'])
+      : cells.length >= 4
+        ? 3
+        : 2;
+    const metricI = headers.length ? idx(['metric type', 'metric', 'type']) : -1;
+    const roundI = headers.length
+      ? idx(['round', 'stage', 'timing', 'date', 'funding'])
+      : cells.length >= 4
+        ? 2
+        : -1;
+
+    const company = cells[companyI] || cells[0];
+    if (!company || /^\(?(no other|benchmark note|outlier)/i.test(company)) continue;
+    const investor = (investorI >= 0 ? cells[investorI] : '') || cells[1] || '';
+    let preInvestmentRevenue =
+      (revenueI >= 0 ? cells[revenueI] : '') || '';
+    let metricType = metricI >= 0 ? cells[metricI] || '' : '';
+    let round = roundI >= 0 ? cells[roundI] || '' : '';
+
+    if (!preInvestmentRevenue && cells.length >= 3) {
+      preInvestmentRevenue = cells[cells.length >= 4 ? 3 : 2] || '';
+    }
+
+    if (isDateLike(preInvestmentRevenue) || isRoundLike(preInvestmentRevenue)) {
+      if (!round) round = preInvestmentRevenue;
+      preInvestmentRevenue = metricType && !isShortMetricType(metricType) ? metricType : '';
+      if (!isShortMetricType(metricType)) metricType = '';
+    }
+
+    if (!preInvestmentRevenue) continue;
+
     tableRows.push({
-      company: cells[0],
-      investor: cells[1] || '',
-      preInvestmentRevenue: cells[2] || cells[1] || '',
-      metricType: cells[3] || '',
-      round: ''
+      company,
+      investor,
+      preInvestmentRevenue,
+      metricType,
+      round,
     });
   }
   return tableRows;
 }
 
+function isBenchmarkHeaderRow(cells: string[]) {
+  const first = String(cells[0] || '').toLowerCase();
+  if (/portfolio\s*company|^company\b|^name\b/.test(first)) return true;
+  const joined = cells.join(' ').toLowerCase();
+  return (
+    /investor/.test(joined) &&
+    /(revenue|arr|mrr|metric)/.test(joined) &&
+    cells.length >= 3
+  );
+}
+
+function isRoundLike(value: any) {
+  const v = String(value || '').trim();
+  if (!v) return false;
+  if (/^(pre-?seed|seed|series\s*[a-d]|angel|bridge)\b/i.test(v)) return true;
+  if (/\b(closed|raised)\s+\$/.test(v) && !/\$?\d[\d.]*\s*[kmb]?\s*(arr|mrr|revenue)/i.test(v)) {
+    return true;
+  }
+  return false;
+}
+
 /* -------------------- helpers -------------------- */
+
+function isMeaningfulMetricValue(value: any) {
+  const v = String(value || '')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[\u00A0\u202F\u2007]/g, ' ')
+    .trim();
+  if (!v || v.length < 2) return false;
+  if (!/\d/.test(v)) return false;
+  // Reject scraps like ".", ",", "2.", ",,", "$."
+  if (/^[\s$]?[\d]?[.,]+$/.test(v)) return false;
+  if (/^\d{1,2}\.$/.test(v)) return false;
+  // Reject bare years mistaken for customers/counts (e.g. "2025")
+  if (/^(19|20)\d{2}$/.test(v)) return false;
+  // Prefer quantitative-looking values
+  if (/^\$?[\d,]+(\.\d+)?\s*[kmb%]?\b/i.test(v)) return true;
+  if (/\d/.test(v) && /[$%kmb]/i.test(v)) return true;
+  return v.length >= 4 && /\d/.test(v) && /[0-9]/.test(v.replace(/[.,\s]/g, ''));
+}
+
+function isDateLike(value: any) {
+  const v = String(value || '').trim();
+  if (!v) return false;
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return true;
+  if (/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}/i.test(v)) return true;
+  if (/^q[1-4]\s*'?\d{2,4}$/i.test(v)) return true;
+  if (/timing of round/i.test(v)) return true;
+  return false;
+}
+
+function isShortMetricType(value: any) {
+  const v = String(value || '').trim();
+  if (!v || v.length > 24) return false;
+  return /^(arr|mrr|revenue|gmv|arr\/mrr|net revenue|bookings)$/i.test(v);
+}
+
+function guessMetricType(value: any) {
+  const v = String(value || '').toLowerCase();
+  if (!v) return '';
+  // Avoid guessing from negations like "no ARR/MRR figure is mentioned"
+  if (/\b(no|not|without|undisclosed)\b.{0,24}\b(arr|mrr|revenue|gmv)\b/.test(v)) return '';
+  if (/\$?\d[\d.,]*\s*[kmb]?\s*arr\b|\barr\b\s*[:of]|\bpre-investment arr\b/.test(v)) return 'ARR';
+  if (/\$?\d[\d.,]*\s*[kmb]?\s*mrr\b|\bmrr\b\s*[:of]/.test(v)) return 'MRR';
+  if (/\bgmv\b/.test(v)) return 'GMV';
+  if (/\$?\d[\d.,]*\s*[kmb]?\s*revenue\b|\brevenue\b\s*[:of]/.test(v)) return 'Revenue';
+  return '';
+}
 
 function asObject(value: any) {
   if (!value) return null;
@@ -766,6 +909,8 @@ function shortUrl(url: any) {
 
 function stripMd(value: any) {
   return String(value || '')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[\u00A0\u202F\u2007]/g, ' ')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/\*\*([\s\S]+?)\*\*/g, '$1')
     .replace(/__([\s\S]+?)__/g, '$1')
@@ -831,42 +976,16 @@ function md(text: any) {
       const nonEmpty = lines.filter((l) => l.trim());
       if (!nonEmpty.length) return '';
 
-      // markdown table
-      if (nonEmpty.length >= 2 && nonEmpty.every((l) => l.includes('|'))) {
-        const rows = nonEmpty.filter((l) => !/^\s*\|?\s*[-:| ]+\s*\|?\s*$/.test(l));
-        if (rows.length >= 2) {
-          const parseRow = (line) =>
-            line
-              .split('|')
-              .map((c) => c.trim())
-              .filter((_, i, arr) => !(i === 0 && arr[0] === '') && !(i === arr.length - 1 && arr[arr.length - 1] === ''))
-              .map((c) => c.trim());
-          const header = parseRow(rows[0]).filter(Boolean);
-          const body = rows.slice(1);
-          if (header.length) {
-            return `<table class="data avoid"><thead><tr>${header.map((h) => `<th>${inlineMd(esc(stripMd(h)))}</th>`).join('')}</tr></thead><tbody>${body
-              .map((r) => {
-                const cells = parseRow(r);
-                while (cells.length < header.length) cells.push('');
-                return `<tr>${cells
-                  .slice(0, header.length)
-                  .map((c) => `<td>${inlineMd(esc(stripMd(c)))}</td>`)
-                  .join('')}</tr>`;
-              })
-              .join('')}</tbody></table>`;
-          }
-        }
-      }
-
       // Pull a leading markdown / label heading out of multi-line blocks
-      // (fixes "### Quick take-aways" dumping into body text).
+      // BEFORE treating the block as a pure table (otherwise "### Gaps …" is dropped).
       const headingMatch = nonEmpty[0].match(
         /^(?:#{1,6}\s+|(?:\d+[.)]\s+))?(.+?)\s*$/
       );
+      const headingText = nonEmpty[0].replace(/^#{1,6}\s+/, '').replace(/[\u2010-\u2015\u2212]/g, '-');
       const looksLikeHeading =
         /^#{1,6}\s+/.test(nonEmpty[0]) ||
-        /^(Quick take-?aways?|Top relevant|Their apparent|Example portfolio|Gaps|Focus|Notes|Summary|Strongest matches|Secondary matches)\b/i.test(
-          nonEmpty[0].replace(/^#{1,6}\s+/, '')
+        /^(Quick take-?aways?|Top relevant|Their apparent|Example portfolio|Gaps|Focus|Notes|Summary|Strongest matches|Secondary matches|Take-?away)\b/i.test(
+          headingText
         );
 
       if (looksLikeHeading && headingMatch) {
@@ -874,6 +993,10 @@ function md(text: any) {
         const rest = nonEmpty.slice(1);
         if (!rest.length) {
           return `<h3>${esc(title)}</h3>`;
+        }
+        if (looksLikeMarkdownTable(rest)) {
+          const rendered = renderMarkdownTable(rest);
+          if (rendered) return `<h3>${esc(title)}</h3>${rendered}`;
         }
         const listish = rest.every((l) => /^([-•*]|\d+[.)])\s+/.test(l.trim()));
         if (listish) {
@@ -885,6 +1008,12 @@ function md(text: any) {
           return `<h3>${esc(title)}</h3><${tag}>${items}</${tag}>`;
         }
         return `<h3>${esc(title)}</h3><p>${inlineMd(esc(stripMd(rest.join('\n'))).replaceAll('\n', '<br/>'))}</p>`;
+      }
+
+      // markdown table (standalone block)
+      if (looksLikeMarkdownTable(nonEmpty)) {
+        const rendered = renderMarkdownTable(nonEmpty);
+        if (rendered) return rendered;
       }
 
       // bullet / numbered list
@@ -943,3 +1072,65 @@ function inlineMd(escaped: any) {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/#{1,6}\s+/g, '');
 }
+
+function looksLikeMarkdownTable(lines: string[]) {
+  const pipeLines = lines.filter((l) => l.includes('|'));
+  if (pipeLines.length < 2) return false;
+  // At least half the lines look like table rows, or a header+separator pair exists.
+  const hasSep = lines.some((l) => /^\s*\|?\s*[-:| ]+\s*\|?\s*$/.test(l));
+  return hasSep || pipeLines.length >= Math.ceil(lines.length * 0.6);
+}
+
+function parseMarkdownRow(line: string) {
+  return line
+    .split('|')
+    .map((c) => c.trim())
+    .filter((_, i, arr) => !(i === 0 && arr[0] === '') && !(i === arr.length - 1 && arr[arr.length - 1] === ''))
+    .map((c) => c.trim());
+}
+
+/** Repair LLM tables missing inner pipes: `| Name – long uncertainty text |` */
+function repairTableCells(cells: string[], expectedCols: number) {
+  if (cells.length >= expectedCols) return cells.slice(0, expectedCols);
+  if (expectedCols === 2 && cells.length === 1) {
+    const text = cells[0];
+    const split = text.split(/\s+[–—-]\s+|\s{2,}|:\s+/);
+    if (split.length >= 2) {
+      return [split[0].trim(), split.slice(1).join(' — ').trim()];
+    }
+  }
+  while (cells.length < expectedCols) cells.push('');
+  return cells;
+}
+
+function renderMarkdownTable(lines: string[]) {
+  const rows = lines.filter((l) => l.includes('|') && !/^\s*\|?\s*[-:| ]+\s*\|?\s*$/.test(l));
+  if (rows.length < 2) return '';
+  const header = parseMarkdownRow(rows[0]).filter(Boolean);
+  if (!header.length) return '';
+  const colCount = header.length;
+  const widths =
+    colCount === 2
+      ? ['28%', '72%']
+      : colCount === 3
+        ? ['24%', '38%', '38%']
+        : null;
+
+  const body = rows.slice(1).map((r) => {
+    const cells = repairTableCells(parseMarkdownRow(r), colCount);
+    return `<tr>${cells
+      .map((c, i) => {
+        const style = widths?.[i] ? ` style="width:${widths[i]}"` : '';
+        return `<td${style}>${inlineMd(esc(stripMd(c)))}</td>`;
+      })
+      .join('')}</tr>`;
+  });
+
+  return `<table class="data avoid"><thead><tr>${header
+    .map((h, i) => {
+      const style = widths?.[i] ? ` style="width:${widths[i]}"` : '';
+      return `<th${style}>${inlineMd(esc(stripMd(h)))}</th>`;
+    })
+    .join('')}</tr></thead><tbody>${body.join('')}</tbody></table>`;
+}
+
