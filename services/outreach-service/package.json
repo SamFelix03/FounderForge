@@ -1,6 +1,6 @@
 {
   "name": "@founderforge/outreach-service",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -15,17 +15,24 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
-    "test": "echo \"no tests yet\""
+    "test": "echo \"no tests yet\"",
+    "live": "tsx src/scripts/live-run.ts",
+    "postinstall": "node -e \"try{require('playwright');}catch(e){}\" || true"
   },
   "dependencies": {
-    "@founderforge/schemas": "workspace:*",
-    "@founderforge/observability": "workspace:*",
     "@founderforge/connectors": "workspace:*",
     "@founderforge/llm-core": "workspace:*",
+    "@founderforge/observability": "workspace:*",
     "@founderforge/policy": "workspace:*",
+    "@founderforge/schemas": "workspace:*",
+    "exa-js": "^2.16.0",
+    "groq-sdk": "^0.30.0",
+    "playwright": "^1.62.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@types/node": "^22.15.30",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   }
