@@ -67,3 +67,18 @@ export interface OutreachWorkflowResult {
   object_key?: string;
   cost_breakdown: CostLine[];
 }
+
+export interface BrandKitWorkflowInput {
+  job_id: string;
+  brand_name: string;
+  description: string;
+  pick?: number;
+}
+
+export interface BrandKitWorkflowResult {
+  zip_url: string;
+  object_key?: string;
+  brand_name: string;
+  chosen_concept: string;
+  cost_breakdown: CostLine[];
+}

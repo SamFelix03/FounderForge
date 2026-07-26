@@ -17,6 +17,7 @@
     "@founderforge/promo-video-service": "workspace:*",
     "@founderforge/social-listening-service": "workspace:*",
     "@founderforge/outreach-service": "workspace:*",
+    "@founderforge/brand-kit-service": "workspace:*",
     "@founderforge/db": "workspace:*",
     "@founderforge/observability": "workspace:*",
     "@founderforge/schemas": "workspace:*",

@@ -15,3 +15,4 @@ export { runAutomatedProductDemoActivity } from "./automatedProductDemo.js";
 export { runPromoVideoActivity } from "./promoVideo.js";
 export { runSocialListeningActivity } from "./socialListening.js";
 export { runOutreachActivity } from "./outreach.js";
+export { runBrandKitActivity } from "./brandKit.js";
