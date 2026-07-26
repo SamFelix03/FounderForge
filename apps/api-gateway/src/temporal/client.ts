@@ -182,3 +182,40 @@ export async function enqueueSocialListening(input: {
 }): Promise<string> {
   return startSocialListeningFn(input);
 }
+
+export async function startOutreachWorkflow(input: {
+  job_id: string;
+  website_url: string;
+  sheet_url: string;
+}): Promise<string> {
+  const client = await getTemporalClient();
+  const { taskQueue } = temporalConfig();
+  const handle = await client.workflow.start("outreachWorkflow", {
+    taskQueue,
+    workflowId: `outreach:${input.job_id}`,
+    args: [input],
+  });
+  log.info("started outreach workflow", {
+    workflow_id: handle.workflowId,
+    job_id: input.job_id,
+  });
+  return handle.workflowId;
+}
+
+export type StartOutreachFn = typeof startOutreachWorkflow;
+
+let startOutreachFn: StartOutreachFn = startOutreachWorkflow;
+
+export function setStartOutreachWorkflowForTests(
+  fn: StartOutreachFn | undefined,
+): void {
+  startOutreachFn = fn ?? startOutreachWorkflow;
+}
+
+export async function enqueueOutreach(input: {
+  job_id: string;
+  website_url: string;
+  sheet_url: string;
+}): Promise<string> {
+  return startOutreachFn(input);
+}

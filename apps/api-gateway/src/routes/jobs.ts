@@ -5,6 +5,7 @@ import {
   CreateJobRequestSchema,
   PromoVideoInputSchema,
   SocialListeningInputSchema,
+  OutreachInputSchema,
   SERVICE_MANIFESTS,
   ServiceNameSchema,
   type ServiceName,
@@ -25,6 +26,8 @@ function validateServiceInput(service: ServiceName, input: Record<string, unknow
       return PromoVideoInputSchema.safeParse(input);
     case "social-listening":
       return SocialListeningInputSchema.safeParse(input);
+    case "outreach":
+      return OutreachInputSchema.safeParse(input);
     default:
       return { success: true as const, data: input };
   }
