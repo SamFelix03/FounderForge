@@ -25,10 +25,14 @@ export function buildReportHtml(data) {
   const performanceBits = parsePerformance(revenue.performanceSummary);
   const investorRows = normalizeInvestors(investors);
   const benchmarkRows = normalizeBenchmarks(portfolio);
-  const contactRows = normalizeContacts(contacts.contacts, { requireReach: false });
-  const withReach = contactRows.filter((c) => c.linkedin || c.email || c.twitter).length;
+  const allContacts = normalizeContacts(contacts.contacts, { requireReach: false });
+  // Table only lists people with at least one public reach channel.
+  const contactRows = normalizeContacts(contacts.contacts, { requireReach: true });
+  const withReach = contactRows.length;
   const firmList = unique(
-    (contacts.firms || []).concat(contactRows.map((c) => c.firm)).filter(Boolean)
+    (contacts.firms || [])
+      .concat(allContacts.map((c) => c.firm))
+      .filter(Boolean)
   );
   const evidence = collectEvidence(data);
 
@@ -234,8 +238,8 @@ export function buildReportHtml(data) {
       <div class="kpis">
         <div class="kpi"><div class="k-label">Investors</div><div class="k-value">${investorRows.length || investors.exaResultCount || 0}</div><div class="k-sub">shortlisted</div></div>
         <div class="kpi"><div class="k-label">Benchmarks</div><div class="k-value">${benchmarkRows.length || portfolio.exaResultCount || 0}</div><div class="k-sub">portfolio comps</div></div>
-        <div class="kpi"><div class="k-label">Contacts</div><div class="k-value">${contactRows.length}</div><div class="k-sub">partners / GPs</div></div>
-        <div class="kpi"><div class="k-label">With reach</div><div class="k-value">${withReach}</div><div class="k-sub">linkedin / email / x</div></div>
+        <div class="kpi"><div class="k-label">Contacts</div><div class="k-value">${allContacts.length}</div><div class="k-sub">partners / GPs found</div></div>
+        <div class="kpi"><div class="k-label">With reach</div><div class="k-value">${withReach}</div><div class="k-sub">shown in §06</div></div>
       </div>
     <div class="cover-bottom">
       <div class="contents">
@@ -268,7 +272,7 @@ export function buildReportHtml(data) {
     <div class="kicker">Outreach posture</div>
     <div class="pill-row">
       <span class="pill">Firms: ${firmList.length || '—'}</span>
-      <span class="pill">Contacts: ${contactRows.length}</span>
+      <span class="pill">Reachable contacts: ${contactRows.length}</span>
       <span class="pill">Investors listed: ${investorRows.length}</span>
       <span class="pill">Benchmarks: ${benchmarkRows.length}</span>
     </div>
@@ -305,11 +309,11 @@ export function buildReportHtml(data) {
 
   <!-- 06 -->
   <div class="section-head"><span class="num">06</span><h2>Partner contacts</h2><span class="tag">Outreach list</span></div>
-  <p class="lead">Partners / GPs at target firms, with public LinkedIn, email, and X when found.</p>
+  <p class="lead">Partners / GPs at target firms who have at least one public LinkedIn, email, X, or other social URL.</p>
   ${firmList.length ? `<div class="pill-row">${firmList.map((f) => `<span class="pill">${esc(f)}</span>`).join('')}</div>` : ''}
   ${contacts.contactSummary ? `<div class="analysis prose">${md(contacts.contactSummary)}</div>` : ''}
   ${renderContactTable(contactRows)}
-  <p class="note">Blank contact fields mean no reliable public value was found — nothing is invented.</p>
+  <p class="note">People without any public contact channel are omitted from this table — nothing is invented.</p>
 
   <!-- 07 -->
   <div class="section-head"><span class="num">07</span><h2>Sources &amp; method</h2><span class="tag">Evidence</span></div>
@@ -410,7 +414,9 @@ function renderBenchmarkTable(rows: any) {
 }
 
 function renderContactTable(rows: any) {
-  if (!rows.length) return `<div class="card"><p class="muted">No partner contacts found.</p></div>`;
+  if (!rows.length) {
+    return `<div class="card"><p class="muted">No partner contacts with public LinkedIn, email, or social URLs were found.</p></div>`;
+  }
   const body = rows
     .map((c) => {
       const links = [];
@@ -423,7 +429,7 @@ function renderContactTable(rows: any) {
       return `<tr>
         <td><strong>${esc(c.name)}</strong>${c.role ? `<div class="tiny">${esc(c.role)}</div>` : ''}</td>
         <td>${esc(c.firm)}</td>
-        <td>${links.join(' · ') || '<span class="tiny">No public socials found</span>'}</td>
+        <td>${links.join(' · ')}</td>
       </tr>`;
     })
     .join('');
@@ -546,12 +552,19 @@ function parseLabeledSummary(text: any) {
     );
 
   return {
-    name: name ? stripMd(name).replace(/^\d+\)\s*/, '') : '',
-    what: what ? stripMd(what) : '',
-    forWhom: forWhom ? stripMd(forWhom) : '',
-    bullets: bullets.slice(0, 4),
-    blurb: stripMd(proseLine || '').slice(0, 220)
+    name: cleanLabel(name).replace(/^\d+\)\s*/, ''),
+    what: cleanLabel(what),
+    forWhom: cleanLabel(forWhom),
+    bullets: bullets.slice(0, 4).map(cleanLabel).filter(Boolean),
+    blurb: cleanLabel(proseLine || '').slice(0, 220)
   };
+}
+
+function cleanLabel(value: any) {
+  return stripMd(String(value || ''))
+    .replace(/^[:\-\s]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function parsePerformance(text: any) {
@@ -712,10 +725,16 @@ function shortUrl(url: any) {
 
 function stripMd(value: any) {
   return String(value || '')
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/\*(.+?)\*/g, '$1')
-    .replace(/`(.+?)`/g, '$1')
-    .replace(/\[(.+?)\]\((.+?)\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*([\s\S]+?)\*\*/g, '$1')
+    .replace(/__([\s\S]+?)__/g, '$1')
+    .replace(/(^|[\s(])\*([^*\n]+?)\*(?=[\s).,;:!?]|$)/g, '$1$2')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    // Orphan markdown markers (unclosed ** / leftover #)
+    .replace(/\*{1,2}/g, '')
+    .replace(/^#+\s*/gm, '')
+    .replace(/\s*#+\s*$/gm, '')
     .trim();
 }
 
@@ -769,6 +788,7 @@ function md(text: any) {
     .map((block) => {
       const lines = block.split('\n').map((l) => l.trimEnd());
       const nonEmpty = lines.filter((l) => l.trim());
+      if (!nonEmpty.length) return '';
 
       // markdown table
       if (nonEmpty.length >= 2 && nonEmpty.every((l) => l.includes('|'))) {
@@ -779,10 +799,6 @@ function md(text: any) {
               .split('|')
               .map((c) => c.trim())
               .filter((_, i, arr) => !(i === 0 && arr[0] === '') && !(i === arr.length - 1 && arr[arr.length - 1] === ''))
-              .filter((c, i, arr) => {
-                // keep empties in middle; drop only edge empties already handled
-                return true;
-              })
               .map((c) => c.trim());
           const header = parseRow(rows[0]).filter(Boolean);
           const body = rows.slice(1);
@@ -801,17 +817,33 @@ function md(text: any) {
         }
       }
 
-      // heading-like
-      const heading = nonEmpty[0]?.match(/^(#{1,3}\s+)?(\d+[.)]\s+)?([A-Z].{3,80})$/);
-      if (
-        nonEmpty.length === 1 &&
-        heading &&
-        (/^#{1,3}\s+/.test(nonEmpty[0]) ||
-          /^(Top relevant|Their apparent|Example portfolio|Gaps|Focus|Notes|Summary)\b/i.test(
-            nonEmpty[0].replace(/^#{1,3}\s+/, '')
-          ))
-      ) {
-        return `<h3>${inlineMd(esc(stripMd(nonEmpty[0].replace(/^#{1,3}\s+/, ''))))}</h3>`;
+      // Pull a leading markdown / label heading out of multi-line blocks
+      // (fixes "### Quick take-aways" dumping into body text).
+      const headingMatch = nonEmpty[0].match(
+        /^(?:#{1,6}\s+|(?:\d+[.)]\s+))?(.+?)\s*$/
+      );
+      const looksLikeHeading =
+        /^#{1,6}\s+/.test(nonEmpty[0]) ||
+        /^(Quick take-?aways?|Top relevant|Their apparent|Example portfolio|Gaps|Focus|Notes|Summary|Strongest matches|Secondary matches)\b/i.test(
+          nonEmpty[0].replace(/^#{1,6}\s+/, '')
+        );
+
+      if (looksLikeHeading && headingMatch) {
+        const title = stripMd(nonEmpty[0].replace(/^#{1,6}\s+/, ''));
+        const rest = nonEmpty.slice(1);
+        if (!rest.length) {
+          return `<h3>${esc(title)}</h3>`;
+        }
+        const listish = rest.every((l) => /^([-•*]|\d+[.)])\s+/.test(l.trim()));
+        if (listish) {
+          const ordered = rest.every((l) => /^\d+[.)]\s+/.test(l.trim()));
+          const tag = ordered ? 'ol' : 'ul';
+          const items = rest
+            .map((l) => `<li>${inlineMd(esc(stripMd(l.trim().replace(/^([-•*]|\d+[.)])\s+/, ''))))}</li>`)
+            .join('');
+          return `<h3>${esc(title)}</h3><${tag}>${items}</${tag}>`;
+        }
+        return `<h3>${esc(title)}</h3><p>${inlineMd(esc(stripMd(rest.join('\n'))).replaceAll('\n', '<br/>'))}</p>`;
       }
 
       // bullet / numbered list
@@ -824,16 +856,38 @@ function md(text: any) {
         return `<${tag}>${items}</${tag}>`;
       }
 
-      // mixed: promote first line if it looks like a section label
-      if (nonEmpty.length > 1 && /^(Top relevant|Their apparent|Example portfolio|Gaps|Focus|Notes)\b/i.test(nonEmpty[0])) {
-        const rest = nonEmpty.slice(1);
-        const listish = rest.every((l) => /^([-•*]|\d+[.)])\s+/.test(l.trim()));
-        if (listish) {
-          const items = rest
-            .map((l) => `<li>${inlineMd(esc(stripMd(l.trim().replace(/^([-•*]|\d+[.)])\s+/, ''))))}</li>`)
-            .join('');
-          return `<h3>${inlineMd(esc(stripMd(nonEmpty[0])))}</h3><ul>${items}</ul>`;
+      // Mixed prose + bullets: render line-by-line so orphan "*" bullets don't leak
+      if (nonEmpty.some((l) => /^([-•*]|\d+[.)])\s+/.test(l.trim()))) {
+        const parts = [];
+        let buf = [];
+        let listBuf = [];
+        const flushBuf = () => {
+          if (buf.length) {
+            parts.push(`<p>${inlineMd(esc(stripMd(buf.join('\n'))).replaceAll('\n', '<br/>'))}</p>`);
+            buf = [];
+          }
+        };
+        const flushList = () => {
+          if (listBuf.length) {
+            const items = listBuf
+              .map((l) => `<li>${inlineMd(esc(stripMd(l.replace(/^([-•*]|\d+[.)])\s+/, ''))))}</li>`)
+              .join('');
+            parts.push(`<ul>${items}</ul>`);
+            listBuf = [];
+          }
+        };
+        for (const line of nonEmpty) {
+          if (/^([-•*]|\d+[.)])\s+/.test(line.trim())) {
+            flushBuf();
+            listBuf.push(line.trim());
+          } else {
+            flushList();
+            buf.push(line);
+          }
         }
+        flushBuf();
+        flushList();
+        return parts.join('');
       }
 
       return `<p>${inlineMd(esc(stripMd(block)).replaceAll('\n', '<br/>'))}</p>`;
@@ -842,9 +896,9 @@ function md(text: any) {
 }
 
 function inlineMd(escaped: any) {
-  // already escaped; only restore bold/italic markers that survived stripMd on source before esc —
-  // when called after esc(stripMd()), markers are gone. For esc-only paths with ** left:
+  // Prefer already-stripped text; convert any remaining paired markers defensively.
   return escaped
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/#{1,6}\s+/g, '');
 }
