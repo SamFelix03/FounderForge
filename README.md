@@ -42,6 +42,8 @@ Feature 5 flow: `POST /v1/services/competitor-research/jobs` → Temporal workfl
 
 Social listening: `POST /v1/services/social-listening/jobs` with `{ "input": { "product_url": "…", "live": false } }` → Temporal → poll for `artifacts[].url` (posted / dry-run Reddit URLs). See `docs/feature-contracts/feature-social-listening.md`.
 
+Outreach: `POST /v1/services/outreach/jobs` with `{ "input": { "website_url": "…", "sheet_url": "…" } }` → Temporal → poll for PDF `artifacts[].url`. See `docs/feature-contracts/feature-outreach.md`.
+
 ## Scripts
 
 | Command | Purpose |
