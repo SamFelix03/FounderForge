@@ -201,6 +201,18 @@ export function buildReportHtml(data) {
     table.data td.num { white-space: nowrap; font-weight: 700; color: var(--teal-deep); }
     table.data a { color: var(--teal-deep); text-decoration: none; font-weight: 600; }
     .tiny { font-size: 7.4pt; color: #4d616a; font-weight: 500; }
+    .contact-links { display: grid; gap: 5px; }
+    .contact-link {
+      display: block; padding: 4px 7px; border: 1px solid #d8e8e5;
+      border-radius: 6px; background: #f5fbf9; line-height: 1.25;
+      overflow-wrap: anywhere; word-break: break-word;
+    }
+    .contact-kind {
+      display: block; margin-bottom: 1px; color: var(--muted);
+      font-size: 6.6pt; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .contact-value { color: var(--teal-deep); font-size: 7.8pt; font-weight: 600; }
     .pill-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 8px; }
     .pill {
       font-size: 7.5pt; font-weight: 600; color: var(--teal-deep);
@@ -420,20 +432,49 @@ function renderContactTable(rows: any) {
   const body = rows
     .map((c) => {
       const links = [];
-      if (c.linkedin) links.push(`<a href="${esc(c.linkedin)}">LinkedIn</a>`);
-      if (c.email) links.push(`<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`);
-      if (c.twitter) links.push(esc(c.twitter));
+      if (c.linkedin) links.push(renderContactLink('LinkedIn', c.linkedin));
+      if (c.email) {
+        links.push(
+          `<a class="contact-link" href="mailto:${esc(c.email)}"><span class="contact-kind">Email</span><span class="contact-value">${esc(c.email)}</span></a>`
+        );
+      }
+      if (c.twitter) links.push(renderContactLink('X / Twitter', c.twitter));
       for (const s of c.otherSocials || []) {
-        if (s) links.push(`<a href="${esc(s)}">${esc(shortUrl(s))}</a>`);
+        if (s) links.push(renderContactLink('Website / profile', s));
       }
       return `<tr>
         <td><strong>${esc(c.name)}</strong>${c.role ? `<div class="tiny">${esc(c.role)}</div>` : ''}</td>
         <td>${esc(c.firm)}</td>
-        <td>${links.join(' · ')}</td>
+        <td><div class="contact-links">${links.join('')}</div></td>
       </tr>`;
     })
     .join('');
   return `<table class="data"><thead><tr><th style="width:28%">Name</th><th style="width:28%">Firm</th><th>Public contacts</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function renderContactLink(kind: string, value: string) {
+  const href = contactHref(value);
+  const display = displayContactUrl(href);
+  return `<a class="contact-link" href="${esc(href)}"><span class="contact-kind">${esc(kind)}</span><span class="contact-value">${esc(display)}</span></a>`;
+}
+
+function contactHref(value: string) {
+  const raw = String(value || '').trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^@?[A-Za-z0-9_]{1,30}$/.test(raw)) {
+    return `https://x.com/${raw.replace(/^@/, '')}`;
+  }
+  return raw;
+}
+
+function displayContactUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const path = url.pathname.replace(/\/+$/, '');
+    return `${url.hostname.replace(/^www\./, '')}${path}${url.search}`;
+  } catch {
+    return value;
+  }
 }
 
 function renderSourceCards(sources: any, title: any) {
