@@ -26,26 +26,44 @@ No Temporal container on Railway. App code already supports API key + TLS via `@
 
 ### Option B — Self-host Temporal on Railway
 
-1. Add a **second** Railway Postgres (or create a separate database on the jobs instance for Temporal — do **not** reuse the jobs schema).
-2. New Railway service → Docker image / Dockerfile path `infra/temporal/Dockerfile` (image `temporalio/auto-setup:1.25.2`).
-3. Private networking only (no public HTTP).
-4. Env for the Temporal service (parse from that Postgres URL):
+1. Add a **second** Railway Postgres dedicated to Temporal (recommended), or use a separate DB name on the jobs instance.
+2. New Railway service → Dockerfile path `infra/temporal/Dockerfile` (image `temporalio/auto-setup:1.25.2`).
+3. Private networking only (no public HTTP). Temporal must be in the **same Railway project** as that Postgres so `*.railway.internal` resolves.
+4. Parse the Postgres URL into **discrete** env vars — do **not** put the full URL in `POSTGRES_SEEDS`.
+
+Example URL:
+`postgresql://USER:PASSWORD@HOST:5432/railway`
 
 ```bash
 DB=postgres12
 DB_PORT=5432
-POSTGRES_USER=<user>
-POSTGRES_PWD=<password>
-POSTGRES_SEEDS=<host>          # e.g. postgres-xxxx.railway.internal
+# ⚠️ DB_PORT defaults to 3306 in auto-setup — you MUST set 5432 or it loops forever
+POSTGRES_USER=USER
+POSTGRES_PWD=PASSWORD
+POSTGRES_SEEDS=HOST
+# host only, e.g. postgres-xxxx.railway.internal  — NO postgresql://, NO user, NO path
 ```
+
+If it still loops on `Waiting for PostgreSQL to startup`:
+- `POSTGRES_SEEDS` is wrong (full URL pasted, typo, or different Railway environment)
+- `DB_PORT` missing / still 3306
+- Temporal service not on the same private network as Postgres
+
+After TCP connects, if schema setup fails with SSL errors, add:
+```bash
+POSTGRES_TLS_ENABLED=true
+POSTGRES_TLS_DISABLE_HOST_VERIFICATION=true
+```
+
+Temporal will create DBs `temporal` + `temporal_visibility` (needs CREATE privilege — Railway’s default `postgres` user is fine).
 
 5. On **api-gateway** + **orchestrator**:
 
 ```bash
-TEMPORAL_ADDRESS=temporal.railway.internal:7233   # use your Temporal service DNS
+TEMPORAL_ADDRESS=<temporal-service>.railway.internal:7233
 TEMPORAL_NAMESPACE=default
 TEMPORAL_TASK_QUEUE=founderforge
-# leave TEMPORAL_API_KEY unset (plaintext on private network)
+# leave TEMPORAL_API_KEY unset
 ```
 
 6. Deploy Temporal **before** (or with) the apps so workers can connect.
