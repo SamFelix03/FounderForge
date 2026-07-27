@@ -155,6 +155,11 @@ HARD CONSTRAINTS
   drop at the reveal") — never generic "upbeat corporate background music."
   SFX should be specific and diegetic where possible (UI clicks, whooshes,
   a real-world sound tied to the metaphor) not generic stock sweeteners.
+- ON-SCREEN TEXT: If the video will include any generated text (titles, captions,
+  endcard typography, labels, etc.), it must be ONLY in English and must use
+  proper, error-free English — correct spelling, grammar, and punctuation with
+  zero typos or broken words. Your seedance_prompt MUST include an explicit
+  instruction to Seedance enforcing this rule.
 
 ═══════════════════════════════════════════════════════════════════
 CREATIVE DIRECTION — HOW TO ACTUALLY MAKE IT GOOD
@@ -207,6 +212,12 @@ ByteDance Seedance 2.0, including:
   shots are fully generated/imagined (no reference image)
 - A closing line locking in the endcard moment (branding, logo treatment,
   final product name callout)
+- A mandatory instruction block directed at Seedance: if the model generates any
+  on-screen text in the video (titles, captions, typography, labels, etc.), that
+  text must be ONLY in English and must be proper, error-free English — correct
+  spelling, grammar, and punctuation with no typos, no garbled words, and no
+  other languages. Include this instruction verbatim in the seedance_prompt so
+  Segmind receives it with every generation request.
 
 ═══════════════════════════════════════════════════════════════════
 OUTPUT — return JSON matching exactly this shape:
@@ -235,7 +246,9 @@ Before returning, self-check:
 2. Do shots cover [0, ${duration}] exactly, contiguous, no gaps or overlaps?
 3. Is the big idea specific to THIS product, or could it be pasted onto any SaaS site? If the latter, rewrite it.
 4. Are image citations only used for screenshots actually provided in the catalog above?
-5. Does it end on an unmistakable brand/product endcard moment?`;
+5. Does it end on an unmistakable brand/product endcard moment?
+6. Does the seedance_prompt include an explicit instruction to Seedance that any
+   generated on-screen text must be ONLY in English and proper, error-free English?`;
 }
 
 /**
