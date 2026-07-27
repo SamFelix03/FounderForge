@@ -1,4 +1,4 @@
-# FounderForge
+﻿# FounderForge
 
 > **The entire marketing department — distilled into six API calls.**
 
@@ -169,16 +169,17 @@ These packages live in `@founderforge/payments-okx` and are wired into the API g
 #### Environment Configuration
 
 ```bash
-# Production
+# Production (payments enabled)
 OKX_API_KEY=your_api_key
 OKX_SECRET_KEY=your_secret_key
 OKX_PASSPHRASE=your_passphrase
-PAY_TO=0xYourAgenticWalletAddress
-NETWORK=eip155:196          # X Layer mainnet
+PAY_TO=0xYourEvmWalletAddress          # must be 0x + 40 hex — NOT an XKO… Agentic Wallet id
+NETWORK=eip155:196                     # X Layer mainnet
+OKX_SYNC_SETTLE=true                   # default: wait for on-chain settle before 202
 
-# Development / staging
-PAYMENTS_BYPASS=true        # Skip payment middleware entirely
-NETWORK=eip155:1952         # X Layer testnet
+# Development / local
+PAYMENTS_BYPASS=true                   # skip OKX middleware entirely
+NETWORK=eip155:1952                    # X Layer testnet (when payments enabled)
 ```
 
 | Variable | Purpose |
@@ -186,9 +187,10 @@ NETWORK=eip155:1952         # X Layer testnet
 | `OKX_API_KEY` | Facilitator API authentication |
 | `OKX_SECRET_KEY` | HMAC signing secret |
 | `OKX_PASSPHRASE` | Additional facilitator auth factor |
-| `PAY_TO` | EVM address that receives USD₮0 payments (Agentic Wallet) |
-| `NETWORK` | CAIP-2 chain identifier for X Layer |
-| `PAYMENTS_BYPASS` | When `true`, all routes proceed without payment (local dev) |
+| `PAY_TO` | **EVM receive address** (`0x…`) for USD₮0 — not an OKX Agentic Wallet / ASP id (`XKO…`) |
+| `NETWORK` | `eip155:196` (mainnet) or `eip155:1952` (testnet) only |
+| `PAYMENTS_BYPASS` | When `true`, skip payment middleware (local dev/tests). When `false`, gateway **fails at startup** if OKX env is missing or invalid |
+| `OKX_SYNC_SETTLE` | When `true` (default), facilitator waits for on-chain confirmation before delivering the paid response |
 
 #### Network & Asset Details
 
@@ -202,6 +204,8 @@ NETWORK=eip155:1952         # X Layer testnet
 
 #### Middleware Initialization Flow
 
+Production uses the official OKX seller stack (`createOkxPaymentProtection` in `@founderforge/payments-okx`). There is **no synthetic 402 fallback** — with `PAYMENTS_BYPASS=false`, missing credentials or an invalid `PAY_TO` prevents the gateway from starting.
+
 ```mermaid
 sequenceDiagram
     participant GW as API Gateway
@@ -209,12 +213,13 @@ sequenceDiagram
     participant SDK as x402-express SDK
     participant Client as Calling Agent
 
-    Note over GW: Server startup
-    GW->>SDK: OKXFacilitatorClient(apiKey, secret, passphrase)
+    Note over GW: createAppWithPayments()
+    GW->>SDK: OKXFacilitatorClient(apiKey, secret, passphrase, syncSettle)
     GW->>SDK: x402ResourceServer + ExactEvmScheme
-    GW->>SDK: register(NETWORK, ExactEvmScheme)
+    GW->>SDK: x402HTTPResourceServer(routes)
+    GW->>SDK: paymentMiddlewareFromHTTPServer(httpServer)
+    GW->>GW: app.listen(port)
     GW->>SDK: resourceServer.initialize()
-    GW->>SDK: paymentMiddleware(routes, resourceServer)
 
     Note over Client: First request (no payment)
     Client->>GW: POST /v1/services/competitor-research/jobs
@@ -223,33 +228,36 @@ sequenceDiagram
 
     Note over Client: Agent pays via OKX wallet
     Client->>GW: POST /v1/services/competitor-research/jobs + payment proof
-    GW->>OKX: Verify payment via facilitator
+    GW->>OKX: Verify + settle (syncSettle when enabled)
     OKX-->>GW: Payment valid
     GW->>GW: Create job, dispatch Temporal workflow
     GW-->>Client: HTTP 202 { job_id, status_url }
 ```
 
+**Startup order:** attach middleware → `app.listen()` → `initializePayments()` (calls `resourceServer.initialize()`). Paid traffic is only safe after that initialize step completes.
+
 #### Route Price Map (Auto-Generated)
 
-The gateway auto-generates one paid route per service from `SERVICE_MANIFESTS`:
+The gateway auto-generates one paid route per manifest entry from `SERVICE_MANIFESTS`:
 
 ```typescript
 // packages/payments/okx/src/index.ts
 for (const manifest of Object.values(SERVICE_MANIFESTS)) {
   routes[`POST ${manifest.endpoint_path}`] = {
-    accepts: [{
+    accepts: {
       scheme: "exact",
       network: env.network,
       payTo: env.payTo,
       price: `$${manifest.a2mcp_price_usd.toFixed(2)}`,
-    }],
+      maxTimeoutSeconds: 600,
+    },
     description: `A2MCP job create for ${manifest.name}`,
     mimeType: "application/json",
   };
 }
 ```
 
-This means adding a new service requires only a schema entry — the payment layer configures itself.
+Adding a new service requires only a schema/manifest entry — the payment layer configures itself. The middleware is created via `createOkxPaymentProtection()` and mounted before `jobsRouter`.
 
 #### Paid vs Free Endpoints
 
@@ -264,14 +272,16 @@ This is **Pattern A** from the A2MCP spec: payment on job creation, free polling
 
 #### Self-Check Before Marketplace Listing
 
-OKX requires ASPs to pass a protocol self-check before listing:
+OKX requires ASPs to pass a protocol self-check before listing. With `PAYMENTS_BYPASS=false` and valid OKX credentials configured:
 
 ```bash
-curl -i -X POST https://your-domain/v1/services/competitor-research/jobs
+curl -i -X POST https://your-domain/v1/services/competitor-research/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"input":{"product_name":"Linear","product_url":"https://linear.app"}}'
 # Expected: HTTP 402 + PAYMENT-REQUIRED: <base64-encoded x402 v2 challenge>
 ```
 
-FounderForge also supports a **synthetic 402 mode** when OKX credentials are not configured — staging environments can validate the protocol shape without live payments.
+For local development, set `PAYMENTS_BYPASS=true` so job creation returns `202` without chain payment. Production/staging with payments enabled must have all of `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, and a valid `PAY_TO` EVM address — otherwise the gateway exits on startup.
 
 ---
 
@@ -481,7 +491,7 @@ flowchart TB
 ```
 FounderForge/
 ├── apps/
-│   ├── api-gateway/          # Express HTTP entry, OKX payments, job CRUD
+│   ├── api-gateway/          # Express HTTP entry, createAppWithPayments, job CRUD
 │   └── orchestrator/         # Temporal worker — workflows + activities
 ├── services/
 │   ├── promo-video-service/
@@ -495,7 +505,7 @@ FounderForge/
 │   ├── db/                   # Postgres job store, migrations
 │   ├── connectors/           # webSearch, fetchPage, fetchPageJina
 │   ├── llm-core/             # Groq complete / completeJson + retries
-│   ├── payments/okx/         # OKX middleware, route config
+│   ├── payments/okx/         # createOkxPaymentProtection, buildPaidRoutesConfig
 │   └── observability/        # Logger, env loader
 ├── docs/                     # Feature contracts, PRD, runbooks
 └── infra/docker/             # Postgres, Redis, Temporal compose
@@ -4067,7 +4077,7 @@ Every paid call uses the same outer body:
 }
 ```
 
-Unpaid requests to job-create routes return **`402 Payment Required`** with a `PAYMENT-REQUIRED` header (base64 x402 v2 challenge). Set `PAYMENTS_BYPASS=true` locally to skip payment.
+Unpaid requests to job-create routes return **`402 Payment Required`** with a `PAYMENT-REQUIRED` header (base64 x402 v2 challenge) when `PAYMENTS_BYPASS=false`. Set `PAYMENTS_BYPASS=true` locally to skip payment. Use `X-Idempotency-Key` on create so a retried paid request does not enqueue duplicate jobs (payment replay is handled by OKX; job dedup is handled by the gateway).
 
 ---
 
