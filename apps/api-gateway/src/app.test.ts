@@ -64,11 +64,12 @@ describe("api-gateway", { skip: !hasDb }, () => {
     await closePool();
   });
 
-  it("health lists seven services", async () => {
+  it("health lists six services", async () => {
     const res = await request(app).get("/health");
     assert.equal(res.status, 200);
     assert.equal(res.body.ok, true);
-    assert.equal(res.body.services.length, 7);
+    assert.equal(res.body.services.length, 6);
+    assert.ok(!res.body.services.includes("social-post"));
   });
 
   it("lists service catalog with A2MCP prices", async () => {
@@ -77,7 +78,7 @@ describe("api-gateway", { skip: !hasDb }, () => {
     const cr = res.body.services.find(
       (s: { name: string }) => s.name === "competitor-research",
     );
-    assert.equal(cr.a2mcp_price_usd, 4.99);
+    assert.equal(cr.a2mcp_price_usd, 1.0);
   });
 
   it("rejects unknown service", async () => {
@@ -108,7 +109,7 @@ describe("api-gateway", { skip: !hasDb }, () => {
 
     assert.equal(create.status, 202);
     assert.ok(create.body.job_id);
-    assert.equal(create.body.list_price_usd, 4.99);
+    assert.equal(create.body.list_price_usd, 1.0);
 
     let status = "queued";
     let body: {

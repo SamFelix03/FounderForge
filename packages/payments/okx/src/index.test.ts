@@ -13,7 +13,7 @@ describe("payments-okx", () => {
     assert.equal(env.bypass, true);
   });
 
-  it("builds seven paid POST routes with exact scheme", () => {
+  it("builds six paid POST routes with exact scheme", () => {
     const routes = buildPaidRoutesConfig(
       "0x0000000000000000000000000000000000000001",
       "eip155:1952",
@@ -24,13 +24,17 @@ describe("payments-okx", () => {
     ];
     assert.ok(route);
     assert.equal(route.accepts.scheme, "exact");
-    assert.equal(route.accepts.price, "$4.99");
+    assert.equal(route.accepts.price, "$1.00");
     assert.equal(route.accepts.network, "eip155:1952");
-    assert.equal(Object.keys(routes as object).length, 7);
+    assert.equal(Object.keys(routes as object).length, 6);
+    assert.equal(
+      (routes as Record<string, unknown>)["POST /v1/services/social-post/jobs"],
+      undefined,
+    );
   });
 
   it("formats competitor research price", () => {
-    assert.equal(priceUsdString("competitor-research"), "$4.99");
+    assert.equal(priceUsdString("competitor-research"), "$1.00");
   });
 
   it("rejects missing credentials instead of falling back", () => {

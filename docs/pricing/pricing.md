@@ -1,15 +1,15 @@
 # A2MCP list prices (USD per call)
 
+Source of truth: `packages/schemas/src/index.ts` (`SERVICE_MANIFESTS`).  
+Keep each `services/*/service.manifest.json` in sync when changing prices.
+
 | Service | Price | SLA (minutes) |
 |---|---|---|
 | promo-video | $2.99 | 15 |
-| automated-product-demo | $4.99 | 30 |
-| social-listening | $1.99 | 10 |
-| outreach | $2.49 | 15 |
-| competitor-research | $4.99 | 20 |
-| brand-kit | $3.99 | 15 |
-| social-post | $0.99 | 5 |
+| automated-product-demo | $1.49 | 30 |
+| social-listening | $1.00 | 15 |
+| outreach | $1.00 | 15 |
+| competitor-research | $1.00 | 20 |
+| brand-kit | $1.49 | 15 |
 
-Source of truth in code: `packages/schemas/src/index.ts` (`SERVICE_MANIFESTS`) and each `services/*/service.manifest.json`.
-
-When changing a price: update both the manifest and the schema constant, then re-submit ASP service metadata via Onchain OS.
+When changing a price: update `SERVICE_MANIFESTS` + the matching `service.manifest.json`, then re-submit ASP service metadata via Onchain OS if listed.

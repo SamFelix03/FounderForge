@@ -33,7 +33,7 @@ describe("PostgresJobStore", { skip: !hasDb }, () => {
       key,
     );
     assert.equal(created.status, "queued");
-    assert.equal(created.list_price_usd, 4.99);
+    assert.equal(created.list_price_usd, 1.0);
 
     const again = await store.create(
       "competitor-research",

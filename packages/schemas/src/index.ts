@@ -7,7 +7,6 @@ export const ServiceNameSchema = z.enum([
   "outreach",
   "competitor-research",
   "brand-kit",
-  "social-post",
 ]);
 export type ServiceName = z.infer<typeof ServiceNameSchema>;
 
@@ -139,39 +138,33 @@ export const SERVICE_MANIFESTS = {
   },
   "automated-product-demo": {
     name: "automated-product-demo",
-    a2mcp_price_usd: 4.99,
+    a2mcp_price_usd: 1.49,
     endpoint_path: "/v1/services/automated-product-demo/jobs",
     sla_minutes: 30,
   },
   "social-listening": {
     name: "social-listening",
-    a2mcp_price_usd: 1.99,
+    a2mcp_price_usd: 1.0,
     endpoint_path: "/v1/services/social-listening/jobs",
     sla_minutes: 15,
   },
-  outreach: {
+  "outreach": {
     name: "outreach",
-    a2mcp_price_usd: 2.49,
+    a2mcp_price_usd: 1.0,
     endpoint_path: "/v1/services/outreach/jobs",
     sla_minutes: 15,
   },
   "competitor-research": {
     name: "competitor-research",
-    a2mcp_price_usd: 4.99,
+    a2mcp_price_usd: 1.0,
     endpoint_path: "/v1/services/competitor-research/jobs",
     sla_minutes: 20,
   },
   "brand-kit": {
     name: "brand-kit",
-    a2mcp_price_usd: 3.99,
+    a2mcp_price_usd: 1.49,
     endpoint_path: "/v1/services/brand-kit/jobs",
     sla_minutes: 15,
-  },
-  "social-post": {
-    name: "social-post",
-    a2mcp_price_usd: 0.99,
-    endpoint_path: "/v1/services/social-post/jobs",
-    sla_minutes: 5,
   },
 } as const satisfies Record<
   ServiceName,

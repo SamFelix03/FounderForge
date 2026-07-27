@@ -2,5 +2,6 @@ packages:
   - "apps/*"
   - "services/*"
   - "!services/_service-template"
+  - "!services/social-post-service"
   - "packages/*"
   - "packages/payments/*"

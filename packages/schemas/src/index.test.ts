@@ -35,10 +35,11 @@ describe("schemas", () => {
     assert.equal(parsed.pick, 0);
   });
 
-  it("lists all seven services", () => {
+  it("lists all six live services", () => {
     const names = ServiceNameSchema.options;
-    assert.equal(names.length, 7);
-    assert.equal(Object.keys(SERVICE_MANIFESTS).length, 7);
+    assert.equal(names.length, 6);
+    assert.equal(Object.keys(SERVICE_MANIFESTS).length, 6);
+    assert.ok(!names.includes("social-post" as never));
   });
 
   it("defaults create-job priority", () => {
