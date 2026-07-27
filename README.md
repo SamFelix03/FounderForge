@@ -23,8 +23,7 @@ This is not a chatbot. This is not a template library. **This is automated marke
 11. [Service 5 — Competitor Research](#service-5--competitor-research)
 12. [Service 6 — Brand Kit](#service-6--brand-kit)
 13. [Universal API Reference](#universal-api-reference)
-14. [Getting Started (Developers)](#getting-started-developers)
-15. [Conclusion — The Next Big Thing](#conclusion--the-next-big-thing)
+14. [Conclusion](#conclusion)
 
 ---
 
@@ -1498,6 +1497,2682 @@ Use **Promo Video** when you need a polished ad that stops the scroll. Use **Aut
 ### Sample Output
 
 <!-- Paste your automated product demo output here -->
+
+---
+
+## Service 3 — Social Listening
+
+> **Your product URL in. Reddit conversations out — with replies already written.**
+
+Every solo founder knows the feeling: you built something that solves a real problem, you scroll Reddit, and there it is — someone in r/SaaS asking *exactly* for what you made. Three hours ago. With 47 upvotes. And you have no idea how to reply without sounding like a shill.
+
+Social Listening fixes that. Drop in your product URL. FounderForge researches your product, discovers live Reddit threads where people are actively seeking solutions like yours, drafts natural peer-tone comments for each thread, runs compliance checks to kill spammy language, and delivers a **PDF engagement playbook** — thread links, context, and copy-paste-ready replies you review and post yourself.
+
+This is not auto-posting. This is not spam automation. This is **intelligence** — the research and drafting work of a community manager, delivered as a structured report in under fifteen minutes.
+
+**Price:** $1.99 per call · **SLA:** 15 minutes · **Output:** Supabase-hosted PDF + Reddit thread URLs
+
+---
+
+### The Pitch
+
+Imagine hiring a Reddit-native community strategist who reads your landing page, understands your ICP, searches every relevant subreddit for people asking for your exact solution, and hands you a briefing doc with five perfect replies — ready to copy, personalize, and post.
+
+That is Social Listening.
+
+You send `https://yourproduct.com`. Groq reads your site, extracts a product profile (name, one-liner, audience, pain keywords, target subreddits). Another Groq call converts that into a **seeker pain statement** — phrased as "someone who complains about X and wishes Y" — which Tavily Research uses to find real Reddit threads where people are looking for tools like yours. Tavily returns structured JSON: thread URLs, titles, context, and often a suggested comment draft.
+
+FounderForge then runs each thread through a **quality funnel**: deduplication, Groq draft refinement (peer tone, no URLs, product mentioned once), and compliance gating (regex + LLM review). Surviving recommendations are compiled into a branded PDF via pdfkit and uploaded to Supabase.
+
+You get a document you can open on your phone, tap a thread link, read the suggested reply, and post it in thirty seconds. No guessing. No "hey guys check out my startup." No ban risk from bot posting.
+
+**The cheapest service in the suite. The highest ROI for early-stage distribution.**
+
+---
+
+### Pipeline Diagram
+
+```mermaid
+flowchart LR
+    subgraph Input["A2MCP Input"]
+        URL["product_url"]
+        MAX["max_posts (1–20)"]
+    end
+
+    subgraph Phase1["Phase 1 — discover_product"]
+        Fetch["Site Corpus Fetch"]
+        Chunk["Text Chunking"]
+        GroqExtract["Groq Per-Chunk Fact Extract"]
+        GroqMerge["Groq → ProductConfig"]
+    end
+
+    subgraph Phase2["Phase 2 — discover_threads"]
+        NeedStmt["Groq Need Statement"]
+        Tavily["Tavily Research API"]
+        Normalize["URL Validation + Normalize"]
+        Events["NormalizedEvent[]"]
+    end
+
+    subgraph Phase3["Phase 3 — draft"]
+        Dedup["Dedup + Thread Cooldown"]
+        GroqDraft["Groq Comment Draft"]
+        Compliance["Compliance Gate"]
+        Ready["Included Recommendations"]
+    end
+
+    subgraph Phase4["Phase 4 — compile_report"]
+        PDFKit["pdfkit PDF Render"]
+        SupaUp["Supabase Upload"]
+        PDF["Engagement PDF URL"]
+    end
+
+    URL --> Fetch --> Chunk --> GroqExtract --> GroqMerge
+    MAX --> GroqMerge
+    GroqMerge --> NeedStmt --> Tavily --> Normalize --> Events
+    Events --> Dedup --> GroqDraft --> Compliance --> Ready
+    Ready --> PDFKit --> SupaUp --> PDF
+```
+
+---
+
+### End-to-End Sequence
+
+```mermaid
+sequenceDiagram
+    participant Agent as Calling Agent
+    participant GW as API Gateway
+    participant OKX as OKX x402
+    participant DB as Postgres
+    participant T as Temporal
+    participant SL as social-listening pipeline
+    participant Groq as Groq LLM
+    participant Tavily as Tavily Research
+    participant PDF as pdfkit
+    participant SB as Supabase
+
+    Agent->>GW: POST /v1/services/social-listening/jobs
+    GW->>OKX: Verify $1.99 payment
+    OKX-->>GW: OK
+    GW->>DB: INSERT job (queued)
+    GW->>T: Start socialListeningWorkflow
+    GW-->>Agent: 202 { job_id, eta_seconds: 900 }
+
+    T->>SL: runSocialListeningActivity
+
+    Note over SL,Groq: Step: discover_product
+    SL->>SL: fetchSiteCorpus(product_url)
+    loop Each text chunk (max 6)
+        SL->>Groq: Extract product facts (JSON)
+        Groq-->>SL: partial facts
+    end
+    SL->>Groq: Merge → ProductConfig
+    Groq-->>SL: product_name, keywords, subreddits[]
+
+    Note over SL,Tavily: Step: discover_threads
+    SL->>Groq: Generate seeker need statement
+    Groq-->>SL: need_statement
+    SL->>Tavily: research(prompt, outputSchema)
+    Tavily-->>SL: requestId
+    loop Poll every 3s (max 3 min)
+        SL->>Tavily: getResearch(requestId)
+        Tavily-->>SL: status + threads[]
+    end
+    SL->>SL: Normalize Reddit URLs → events
+
+    Note over SL,Groq: Step: draft
+    loop Each thread (up to max_posts)
+        SL->>SL: dedupAndRateLimit
+        alt Tavily suggested_comment ≥ 40 chars
+            SL->>SL: Use Tavily draft
+        else
+            SL->>Groq: writeDraft (peer tone, no URLs)
+            Groq-->>SL: draft_text
+        end
+        SL->>Groq: reviewCompliance
+        Groq-->>SL: ok / fail
+    end
+
+    Note over SL,SB: Step: compile_report
+    SL->>PDF: Render Reddit Engagement Plan PDF
+    PDF-->>SL: PDF buffer
+    SL->>SB: POST demoforge/reddit/*.pdf
+    SB-->>SL: pdf_url
+
+    SL->>DB: UPDATE job → completed
+    SL-->>T: { pdf_url, thread_urls[], recommendations_count }
+
+    Agent->>GW: GET /v1/jobs/{job_id}
+    GW-->>Agent: artifacts=[pdf_report, reddit_thread×N]
+```
+
+---
+
+### How It Works — Phase by Phase
+
+#### Phase 1: `discover_product` — Product Intelligence from URL
+
+Before searching Reddit, the pipeline must understand *what* your product is, *who* it serves, and *where* those people hang out online.
+
+**Step 1a — Site Corpus Fetch**
+
+The service fetches text from your product URL (homepage + light related paths) via `fetchSiteCorpus()`. This avoids blowing Groq token limits by controlling fetch scope locally rather than asking the LLM to browse.
+
+**Step 1b — Chunked Fact Extraction**
+
+Site text is split into chunks (~2,800 chars each, max 6 chunks). For each chunk, Groq (`openai/gpt-oss-120b` by default) extracts structured facts:
+
+```json
+{
+  "product_name": "FounderForge",
+  "one_liner": "AI marketing suite for solo founders",
+  "audience": "solo founders, indie hackers",
+  "problem": "marketing grunt work without a team",
+  "capabilities": ["promo video", "competitor research", "brand kit"],
+  "keywords": ["solo founder marketing", "AI go-to-market", "product launch tools"]
+}
+```
+
+Only facts present in the chunk are extracted — no hallucinated marketing fluff.
+
+**Step 1c — Product Profile Merge**
+
+A second Groq call merges all chunk extractions into a full `ProductConfig`:
+
+| Field | Purpose |
+|-------|---------|
+| `product_name` | Brand name for comment drafting |
+| `one_liner` | Short description |
+| `description` | Extended context for drafts |
+| `disclosure_line` | FTC-style disclosure (includes "disclosure" + domain) |
+| `keywords` | 8–20 pain/search phrases |
+| `subreddits` | 4–6 target communities (bare names, no `r/`) |
+| `max_posts_per_cycle` | Default 5–8 (overridden by `max_posts` input) |
+| `window_hours` | Scheduling window (default 24h) |
+
+**Cost tracked:** Groq discover_product (~$0.02).
+
+---
+
+#### Phase 2: `discover_threads` — Tavily Reddit Research
+
+With a product profile locked, the pipeline finds **live seeker threads** on Reddit.
+
+**Step 2a — Need Statement Generation**
+
+Groq converts the product profile into a single **seeker pain sentence** — describing the *person and their pain*, not the product brand:
+
+> *"someone building an AI agent who complains about juggling separate API keys and subscriptions, and wishes there was one unified way to discover and pay for tools per call"*
+
+This sentence goes inside Tavily's research prompt template:
+
+```
+Fetch Reddit posts where {NEED_STATEMENT} I want ONLY reddit posts and NOTHING else.
+```
+
+If Groq fails or returns weak output, a deterministic fallback need statement is constructed from `one_liner` + keywords.
+
+**Step 2b — Tavily Research (Structured JSON)**
+
+```typescript
+const created = await tavily.research(prompt, {
+  model: "mini",  // or "pro" / "auto"
+  outputSchema: REDDIT_THREADS_OUTPUT_SCHEMA,
+});
+```
+
+The output schema enforces:
+
+```json
+{
+  "threads": [
+    {
+      "url": "https://www.reddit.com/r/SaaS/comments/abc123/looking_for_marketing_tool/",
+      "title": "Looking for a marketing tool that doesn't require a team",
+      "selftext": "I'm a solo founder and need help with...",
+      "subreddit": "SaaS",
+      "why": "OP is actively seeking a solo-founder marketing solution",
+      "suggested_comment": "Have you looked at tools that automate..."
+    }
+  ]
+}
+```
+
+**Research rules baked into the prompt:**
+- ONLY real `reddit.com/r/.../comments/.../` URLs
+- ONLY seeker posts (people asking for recommendations)
+- EXCLUDE founder launches ("I built", "just launched", "feedback on my")
+- Do not invent URLs
+- Max threads capped by `max_posts` input
+
+**Step 2c — Async Polling**
+
+Tavily Research runs asynchronously. The pipeline polls `getResearch(requestId)` every **3 seconds** for up to **3 minutes** until status is `completed` or `failed`.
+
+**Step 2d — URL Normalization & Fallback**
+
+Discovered threads pass through strict URL validation:
+- Must be `reddit.com` domain
+- Must match `/r/{sub}/comments/{id}/` pattern
+- Deduplicated by normalized URL
+
+If structured output returns 0 threads, the pipeline **falls back to Tavily Search** (`includeDomains: ["reddit.com"]`) as a cheaper discovery path.
+
+Each hit is converted to a `NormalizedEvent` with platform metadata, permalink, thread context, and optional `suggested_reply` from Tavily.
+
+**Cost tracked:** Tavily reddit_research (~$0.03).
+
+---
+
+#### Phase 3: `draft` — Comment Generation & Quality Funnel
+
+Each discovered thread enters a multi-stage funnel. Only threads that pass every gate become **included recommendations** in the final PDF.
+
+**Gate 1 — Dedup & Rate Limit**
+
+```typescript
+const dedup = await dedupAndRateLimit(event);
+```
+
+| Check | Behavior |
+|-------|----------|
+| Event already seen | Skip — `already_scheduled_or_posted` |
+| Same thread posted recently | Skip — `thread_cooldown_{N}m` (default 360 min) |
+
+Cooldown is **per-thread**, not per-subreddit — blocking an entire community would wrongly exclude valid threads.
+
+**Gate 2 — Draft Generation**
+
+If Tavily returned a `suggested_comment` ≥ 40 characters, it is used directly. Otherwise, Groq generates a fresh draft via `writeDraft()`:
+
+- **Peer tone** — helpful advice first, product mentioned once casually
+- **No URLs** — stripped via regex (`https?://`, domain names)
+- **No CTAs** — no "check out", "sign up", "pricing"
+- **2–4 short paragraphs** — Reddit-native length
+- **Few-shot examples** — top 4 past successful replies (via local embeddings) inform tone
+
+If the model forgets the product name, it is appended: *"I've had decent luck with {product_name} for that kind of setup."*
+
+Drafts are capped at 1,200 characters.
+
+**Gate 3 — Compliance Review**
+
+Two-layer compliance gate:
+
+**Layer 1 — Deterministic regex checks (instant fail):**
+
+| Rule | Fail reason |
+|------|-------------|
+| Length < 40 or > 1,400 chars | `length_out_of_bounds` |
+| Contains URL or domain (.com, .ai, etc.) | `contains_link_or_domain` |
+| Contains "Disclosure:" boilerplate | `looks_like_ad_disclosure` |
+| Missing product name | `missing_product_name` |
+| Promotional CTA language | `promotional_cta` |
+
+**Layer 2 — Groq LLM review:**
+
+The compliance agent reads the thread + draft and returns `{ ok: boolean, notes: string }`. It fails drafts that are mostly ads, ignore the thread context, or read like marketing copy.
+
+Threads that fail any gate are recorded as **skipped** with a `skip_reason`. Threads that pass become **included** recommendations.
+
+**Cost tracked:** Groq draft (~$0.05 × number of included threads).
+
+---
+
+#### Phase 4: `compile_report` — PDF Engagement Playbook
+
+Included recommendations are compiled into a professional PDF using **pdfkit** (no browser required).
+
+**PDF structure:**
+
+1. **Header** — "Reddit Engagement Plan", product name, one-liner, website link
+2. **Target subreddits** — list of communities researched
+3. **Suggested comments** — for each included thread:
+   - Subreddit label (`r/SaaS`)
+   - Thread title (clickable)
+   - Permalink (clickable URL)
+   - Thread context ("Why this thread matches")
+   - **Comment to post** — full copy-paste draft
+   - Draft rationale notes
+
+The PDF is uploaded to **Supabase Storage** at `demoforge/reddit/{timestamp}-{uuid}-{slug}.pdf`.
+
+**Cost tracked:** (included in pipeline overhead; storage ~negligible)
+
+---
+
+### Internal Tools & Dependencies
+
+| Tool | Role in Social Listening | Module |
+|------|-------------------------|--------|
+| **Groq (`gpt-oss-120b`)** | Product discovery, need statements, comment drafting, compliance review | `product/discover.ts`, `product/needStatement.ts`, `agents/draft.ts`, `agents/compliance.ts` |
+| **Tavily Research** | Reddit thread discovery with structured JSON output | `ingest/tavilyReddit.ts`, `ingest/tavilyIngest.ts` |
+| **Tavily Search** | Fallback discovery when Research returns 0 threads | `ingest/tavilyReddit.ts` |
+| **Local Embeddings** | Few-shot tone matching for draft generation | `embeddings/local.ts` |
+| **pdfkit** | PDF report rendering (no browser) | `report/compileReport.ts` |
+| **Supabase Storage** | PDF hosting (`demoforge/reddit/`) | `report/storage.ts` |
+| **Temporal** | Durable workflow orchestration, heartbeats | `apps/orchestrator` |
+| **PostgreSQL** | Job state, step tracking, artifact URLs | `@founderforge/db` |
+| **Zod** | Input/output validation | `schema.ts`, `@founderforge/schemas` |
+
+#### Required Environment Variables
+
+```bash
+# Groq — product research, drafting, compliance
+GROQ_API_KEY=...
+GROQ_MODEL=openai/gpt-oss-120b          # optional override
+
+# Tavily — Reddit thread discovery
+TAVILY_API_KEY=...
+TAVILY_RESEARCH_MODEL=mini              # mini | pro | auto
+TAVILY_REDDIT_MODE=research             # must be "research"
+TAVILY_REDDIT_LIMIT=10                  # max threads to discover
+TAVILY_POLL_MS=3000
+TAVILY_RESEARCH_TIMEOUT_MS=180000
+
+# Product discovery tuning
+PRODUCT_CHUNK_SIZE=2800
+PRODUCT_MAX_CHUNKS=6
+
+# Dedup
+THREAD_COOLDOWN_MINUTES=360
+
+# Supabase — PDF report storage
+REDDIT_DOC_SUPABASE_URL=https://xxx.supabase.co
+REDDIT_DOC_SUPABASE_SERVICE_ROLE_KEY=...
+REDDIT_DOC_SUPABASE_STORAGE_BUCKET=demoforge
+REDDIT_DOC_SUPABASE_OBJECT_PREFIX=reddit
+```
+
+---
+
+### A2MCP Request Body
+
+**Endpoint:** `POST /v1/services/social-listening/jobs`
+
+**Price:** $1.99 (x402 `exact` scheme on X Layer)
+
+#### Full Request Example
+
+```json
+{
+  "input": {
+    "product_url": "https://www.notion.so",
+    "max_posts": 5
+  },
+  "callback_url": "https://your-app.com/webhooks/founderforge",
+  "priority": "normal"
+}
+```
+
+#### Input Schema (`SocialListeningInputSchema`)
+
+| Field | Required | Type | Default | Constraints |
+|-------|----------|------|---------|-------------|
+| `product_url` | **Yes** | `string (URL)` | — | Valid HTTPS/HTTP URL of the product to research |
+| `max_posts` | No | `integer` | `5` (from product profile) | Min `1`, max `20` — cap on threads to include in the report |
+| `live` | No | `boolean` | `false` | **Deprecated — ignored.** Pipeline does not auto-post to Reddit. |
+
+> **Important:** The `live` field exists in the schema for backward compatibility but is **completely ignored**. Social Listening returns a PDF report with copy-paste drafts. You post manually.
+
+#### Minimal Request
+
+```json
+{
+  "input": {
+    "product_url": "https://linear.app"
+  }
+}
+```
+
+#### cURL Example (local dev with payment bypass)
+
+```bash
+curl -X POST http://localhost:4021/v1/services/social-listening/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Idempotency-Key: sl-linear-$(date +%s)" \
+  -d '{
+    "input": {
+      "product_url": "https://linear.app",
+      "max_posts": 5
+    }
+  }'
+```
+
+#### Create Response (`202 Accepted`)
+
+```json
+{
+  "job_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "list_price_usd": 1.99,
+  "eta_seconds": 900,
+  "status_url": "/v1/jobs/c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "status": "queued"
+}
+```
+
+#### Poll Response — In Progress
+
+```json
+{
+  "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "service": "social-listening",
+  "status": "running",
+  "step": "discover_threads",
+  "artifacts": [],
+  "cost_breakdown": [],
+  "list_price_usd": 1.99,
+  "error": null,
+  "created_at": "2026-07-27T12:00:00.000Z",
+  "updated_at": "2026-07-27T12:02:30.000Z",
+  "eta_seconds": 900
+}
+```
+
+The `step` field reflects the current pipeline phase: `discover_product` → `discover_threads` → `draft` → `compile_report`.
+
+#### Poll Response — Completed
+
+```json
+{
+  "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "service": "social-listening",
+  "status": "completed",
+  "step": "compile_report",
+  "artifacts": [
+    {
+      "type": "pdf_report",
+      "url": "https://xxx.supabase.co/storage/v1/object/public/demoforge/reddit/2026-07-27T12-08-00-abc12345-notion-reddit-1730000000.pdf",
+      "object_key": "reddit/2026-07-27T12-08-00-abc12345-notion-reddit-1730000000.pdf",
+      "mime_type": "application/pdf"
+    },
+    {
+      "type": "reddit_thread",
+      "url": "https://www.reddit.com/r/SaaS/comments/abc123/looking_for_project_management/",
+      "mime_type": "text/uri-list"
+    },
+    {
+      "type": "reddit_thread",
+      "url": "https://www.reddit.com/r/startups/comments/def456/best_tools_for_solo_founders/",
+      "mime_type": "text/uri-list"
+    }
+  ],
+  "cost_breakdown": [
+    { "vendor": "llm", "operation": "discover_product", "amount_usd": 0.02 },
+    { "vendor": "tavily", "operation": "reddit_research", "amount_usd": 0.03 },
+    { "vendor": "llm", "operation": "draft", "amount_usd": 0.25 }
+  ],
+  "list_price_usd": 1.99,
+  "error": null,
+  "created_at": "2026-07-27T12:00:00.000Z",
+  "updated_at": "2026-07-27T12:08:15.000Z",
+  "eta_seconds": 900
+}
+```
+
+The job response body also includes structured `recommendations[]` with `target_permalink`, `draft_text`, `title`, `status` (`included` | `skipped`), `community`, and `skip_reason` for programmatic consumption.
+
+---
+
+### Temporal Orchestration
+
+Social Listening uses a **single-activity workflow** — one durable Temporal activity wraps the entire `runPipeline()` call.
+
+```typescript
+// apps/orchestrator/src/workflows/socialListening.ts
+export async function socialListeningWorkflow(input) {
+  await short.markJobRunning(input.job_id);
+
+  const result = await long.runSocialListeningActivity({
+    job_id: input.job_id,
+    product_url: input.product_url,
+    max_posts: input.max_posts,
+  });
+
+  await short.completeJob(input.job_id, {
+    artifacts: [
+      { type: "pdf_report", url: result.pdf_url, object_key: result.object_key },
+      ...result.thread_urls.map(url => ({
+        type: "reddit_thread", url, mime_type: "text/uri-list",
+      })),
+    ],
+    cost_breakdown: result.cost_breakdown,
+  });
+}
+```
+
+| Activity Config | Value | Reason |
+|-----------------|-------|--------|
+| `startToCloseTimeout` | 20 minutes | Tavily Research polling + multi-thread drafting |
+| `heartbeatTimeout` | 3 minutes | Detect stuck activities during Tavily poll |
+| `maximumAttempts` | 1 | No retry on full pipeline (avoid duplicate drafts) |
+| Heartbeat interval | 30 seconds | Keeps activity alive during research poll |
+
+---
+
+### Error Handling & Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| `TAVILY_API_KEY` missing | Hard fail at ingest — "TAVILY_API_KEY is required" |
+| Invalid product URL | Hard fail during `discover_product` |
+| Groq chunk extraction fails | Partial facts omitted; merge still proceeds |
+| Need statement LLM fails | Deterministic fallback from one_liner + keywords |
+| Tavily Research times out (>3 min) | Hard fail with last status |
+| Tavily Research returns 0 threads | Falls back to Tavily Search |
+| Tavily Search also returns 0 | Empty report — 0 included recommendations |
+| Thread fails dedup | Skipped with reason; pipeline continues |
+| Draft generation fails for a thread | Skipped with reason; pipeline continues |
+| Compliance fails (regex or LLM) | Skipped with reason; pipeline continues |
+| All threads skipped | PDF generated with 0 suggested comments |
+| Supabase not configured | Hard fail at `compile_report` |
+| Duplicate job (same idempotency key) | Returns existing job |
+
+---
+
+### Why Report-Only (No Auto-Posting)
+
+Social Listening deliberately **does not post to Reddit on your behalf**. This is a product decision, not a missing feature:
+
+1. **Platform risk** — Reddit aggressively bans automated posting. Manual review protects your account.
+2. **Quality control** — You know your voice. A 10-second personalization pass beats a bot posting generic copy.
+3. **Compliance** — FTC disclosure requirements vary by context. You decide when and how to disclose.
+4. **Agent safety** — A2MCP agents should not perform irreversible public actions without human approval.
+
+The PDF is designed for **human-in-the-loop execution**: open report → tap thread → read context → paste draft → post.
+
+---
+
+### Sample Output
+
+<!-- Paste your social listening PDF / thread links here -->
+
+---
+
+## Service 4 — Outreach
+
+> **Your website + revenue sheet in. Investor intelligence report out.**
+
+Fundraising is a full-time job that solo founders cannot afford to have. You need to know which VCs actually invest in your category and stage. You need to know what their portfolio companies were earning *before* they got funded — so you can answer "are we too early?" with data, not hope. You need partner names, LinkedIn profiles, and public contact paths — not a stale Crunchbase export from 2023.
+
+Outreach is FounderForge's **investor intelligence engine**. Send your company website and a public revenue spreadsheet URL. The pipeline visits your site with Groq Compound, analyzes every sheet in your workbook, searches Exa for thesis-fit investors, benchmarks pre-investment portfolio revenue, finds partner contacts with public socials, enriches each person with targeted Exa searches, and compiles everything into a **professional PDF report** uploaded to Supabase.
+
+No cold email blasts. No CRM setup. No $500/month data subscriptions. **One API call. One PDF. Everything you need to start outreach with confidence.**
+
+**Price:** $2.49 per call · **SLA:** 15 minutes · **Output:** Supabase-hosted investor intelligence PDF
+
+---
+
+### The Pitch
+
+Imagine handing a first-time founder a briefing document that a Series A fundraising consultant would charge $5,000 to produce — and getting it back in fifteen minutes for the price of a coffee.
+
+That is Outreach.
+
+You provide two inputs: `website_url` and `sheet_url`. FounderForge's multi-agent pipeline does the rest:
+
+1. **Website Analyst** — Groq Compound actually visits your site (`visit_website` + `web_search` tools) and returns a factual product summary
+2. **Revenue Analyst** — Groq reads every sheet in your `.xlsx`/`.csv` workbook and synthesizes ARR, MRR, growth trajectory, and cross-sheet insights
+3. **Investor Finder** — Groq crafts precision Exa queries; Exa deep-searches for VCs and angels that match your category and stage; Groq synthesizes a ranked shortlist
+4. **Portfolio Benchmark** — Exa finds pre-investment ARR/MRR/revenue of portfolio companies at those firms — so you know if you're in range
+5. **Partner Contacts** — Exa discovers named partners/GPs with LinkedIn, email, and Twitter profiles
+6. **Contact Enricher** — One targeted Exa search per person to fill gaps in social profiles
+7. **Report Compiler** — Playwright renders a branded HTML template to PDF and uploads to Supabase
+
+The result is a single PDF you can attach to your deck prep notes, share with advisors, or use to prioritize your warm intro requests.
+
+**This is not a mail merge tool. This is fundraising research — automated.**
+
+---
+
+### Pipeline Diagram
+
+```mermaid
+flowchart LR
+    subgraph Input["A2MCP Input"]
+        WEB["website_url"]
+        SHEET["sheet_url"]
+    end
+
+    subgraph Phase0["Phase 0 — download_sheet"]
+        DL["Fetch Spreadsheet"]
+        Temp["Temp .xlsx/.csv"]
+    end
+
+    subgraph Phase1["Phase 1 — website"]
+        Compound["Groq Compound"]
+        ProdSum["Product Summary"]
+    end
+
+    subgraph Phase2["Phase 2 — revenue"]
+        XLSX["Sheet Loader (xlsx)"]
+        GroqRev["Groq Revenue Analyst"]
+        PerfSum["Performance Summary"]
+    end
+
+    subgraph Phase3["Phase 3 — investors"]
+        GroqIQ["Groq Exa Query Planner"]
+        ExaInv["Exa Deep Search"]
+        InvSum["Investor Shortlist"]
+    end
+
+    subgraph Phase4["Phase 4 — portfolio"]
+        GroqPQ["Groq Portfolio Query"]
+        ExaPort["Exa Benchmark Search"]
+        BenchSum["Pre-Investment Revenue Benchmarks"]
+    end
+
+    subgraph Phase5["Phase 5 — partners"]
+        GroqCQ["Groq Contact Query"]
+        ExaPart["Exa Partner Search"]
+        Contacts["Partner Contact List"]
+    end
+
+    subgraph Phase6["Phase 6 — enrich"]
+        ExaPer["Exa Per-Person Search"]
+        Enriched["Enriched Contacts"]
+    end
+
+    subgraph Phase7["Phase 7 — report"]
+        HTML["HTML Template"]
+        PW["Playwright → PDF"]
+        SupaUp["Supabase Upload"]
+        PDF["Investor PDF URL"]
+    end
+
+    WEB --> Compound --> ProdSum
+    SHEET --> DL --> Temp --> XLSX --> GroqRev --> PerfSum
+    ProdSum --> GroqIQ
+    PerfSum --> GroqIQ
+    GroqIQ --> ExaInv --> InvSum
+    InvSum --> GroqPQ
+    ProdSum --> GroqPQ
+    PerfSum --> GroqPQ
+    GroqPQ --> ExaPort --> BenchSum
+    InvSum --> GroqCQ --> ExaPart --> Contacts
+    Contacts --> ExaPer --> Enriched
+    ProdSum --> HTML
+    PerfSum --> HTML
+    InvSum --> HTML
+    BenchSum --> HTML
+    Enriched --> HTML
+    HTML --> PW --> SupaUp --> PDF
+```
+
+---
+
+### End-to-End Sequence
+
+```mermaid
+sequenceDiagram
+    participant Agent as Calling Agent
+    participant GW as API Gateway
+    participant OKX as OKX x402
+    participant DB as Postgres
+    participant T as Temporal
+    participant OR as outreach pipeline
+    participant Groq as Groq (Compound + OSS)
+    participant Exa as Exa Deep Search
+    participant PW as Playwright
+    participant SB as Supabase
+
+    Agent->>GW: POST /v1/services/outreach/jobs
+    GW->>OKX: Verify $2.49 payment
+    OKX-->>GW: OK
+    GW->>DB: INSERT job (queued)
+    GW->>T: Start outreachWorkflow
+    GW-->>Agent: 202 { job_id, eta_seconds: 900 }
+
+    T->>OR: runOutreachActivity
+
+    Note over OR: Step: download_sheet
+    OR->>OR: fetch(sheet_url) → temp file
+
+    Note over OR,Groq: Step: website
+    OR->>Groq: Compound visit_website + web_search
+    Groq-->>OR: productSummary
+
+    Note over OR,Groq: Step: revenue
+    OR->>OR: loadWorkbook (all sheets)
+    OR->>Groq: Analyze cross-sheet performance
+    Groq-->>OR: performanceSummary
+
+    Note over OR,Exa: Step: investors
+    OR->>Groq: Craft Exa investor query (JSON)
+    OR->>Exa: deep search + outputSchema
+    Exa-->>OR: investor results + structured output
+    OR->>Groq: Synthesize investor shortlist
+
+    Note over OR,Exa: Step: portfolio
+    OR->>Groq: Craft portfolio benchmark query
+    OR->>Exa: deep search (pre-investment revenue)
+    Exa-->>OR: benchmark results
+    OR->>Groq: Synthesize portfolio revenue summary
+
+    Note over OR,Exa: Step: partners
+    OR->>Groq: Craft partner contact query
+    OR->>Exa: deep search (LinkedIn, email, Twitter)
+    Exa-->>OR: contact list (structured JSON)
+
+    Note over OR,Exa: Step: enrich
+    loop Each contact
+        OR->>Exa: Per-person deep-lite search
+        Exa-->>OR: LinkedIn, email, socials
+    end
+
+    Note over OR,SB: Step: report
+    OR->>OR: buildReportHtml(all findings)
+    OR->>PW: setContent → page.pdf()
+    PW-->>OR: PDF buffer
+    OR->>SB: POST demoforge/outreach/*.pdf
+    SB-->>OR: pdf_url
+
+    OR->>DB: UPDATE job → completed
+    OR-->>T: { pdf_url, object_key, cost_breakdown }
+
+    Agent->>GW: GET /v1/jobs/{job_id}
+    GW-->>Agent: artifacts=[{ type: pdf_report, url }]
+```
+
+---
+
+### How It Works — Phase by Phase
+
+#### Phase 0: `download_sheet` — Spreadsheet Ingestion
+
+The API accepts a **public URL** to your revenue workbook. The pipeline downloads it to a temp file before analysis.
+
+```typescript
+const res = await fetch(sheet_url);
+// Saved to: /tmp/founderforge-outreach/sheet-{timestamp}-{uuid}.xlsx
+```
+
+**Supported formats:** `.xlsx`, `.xls`, `.csv`, `.ods`, `.xlsm`, `.xlsb`
+
+The `sheet_url` must be publicly accessible (CDN link, S3 presigned URL, Google Drive direct download link, etc.). The pipeline does not authenticate to private Google Sheets — host the file at a fetchable URL.
+
+> **Note:** `sheet_path` (local filesystem path) exists for CLI/offline runs only. A2MCP API calls require `sheet_url`.
+
+---
+
+#### Phase 1: `website` — Product Analysis (Groq Compound)
+
+The website analyst uses **Groq Compound** — a model with built-in tool execution — to actually visit your site.
+
+```typescript
+await groq.chat.completions.create({
+  model: "groq/compound",
+  compound_custom: {
+    tools: { enabled_tools: ["visit_website", "web_search"] },
+  },
+  messages: [/* analyze product */],
+});
+```
+
+**Tools invoked:**
+- `visit_website` — reads primary site content directly
+- `web_search` — supplements with third-party context when needed
+
+**Output:** A 3–5 sentence factual product summary covering:
+1. Product name
+2. What it does (1–2 sentences)
+3. Target audience
+4. Notable capabilities (max 4 bullets)
+
+No investor pitch tone. No fluff. Primary site content preferred over third-party commentary.
+
+**Cost tracked:** Groq Compound website (~$0.05).
+
+---
+
+#### Phase 2: `revenue` — Spreadsheet Performance Analysis
+
+The revenue analyst loads **every non-empty sheet** from your workbook via the `xlsx` library and feeds the full content to Groq.
+
+**Sheet loader behavior:**
+- Reads all sheets (not just the first tab)
+- Converts each sheet to CSV text (capped at 25,000 chars per sheet, 80,000 total)
+- Scores sheets for revenue relevance (ARR, MRR, churn, customers keywords)
+- Passes sheet metadata: name, row count, column headers
+
+**Groq analysis prompt asks for:**
+1. Revenue overview (ARR/MRR/metrics across sheets)
+2. Trajectory (growth, decline, flat — with evidence)
+3. Cross-sheet insights (how customers, MRR, and churn relate)
+4. Notable patterns (seasonality, concentration, segment mix)
+5. Risks / gaps / inconsistencies
+
+**Critical rule:** The model must not invent numbers. If sheets conflict, it calls that out explicitly.
+
+**Cost tracked:** Groq revenue sheet (~$0.03).
+
+---
+
+#### Phase 3: `investors` — Investor Discovery (Groq + Exa)
+
+This is a **two-stage agent loop**: Groq plans the search, Exa executes it, Groq synthesizes results.
+
+**Stage 1 — Query Planning (Groq JSON):**
+
+```json
+{
+  "query": "VCs and angel investors that fund B2B SaaS marketing automation tools at $500K–$2M ARR seed stage",
+  "additionalQueries": [
+    "early stage investors portfolio companies similar to ...",
+    "seed stage SaaS investors check size $500K–$2M"
+  ]
+}
+```
+
+Query rules: focus on thesis fit (category, B2B/B2C, stage, geography), mention product category explicitly, prefer queries that surface firm names and portfolio examples.
+
+**Stage 2 — Exa Deep Search:**
+
+```typescript
+await exa.search(query, {
+  type: "deep",
+  numResults: 8,
+  additionalQueries: [...],
+  outputSchema: {
+    investors: [{ name, type, thesis, whyRelevant, examplePortfolioCompanies }]
+  },
+});
+```
+
+**Stage 3 — Synthesis (Groq):**
+
+From Exa evidence, Groq produces:
+1. Top relevant investors/firms (name + why they fit)
+2. Apparent focus / thesis
+3. Example portfolio companies mentioned in results
+4. Gaps / low-confidence items
+
+**Cost tracked:** Exa investor search (~$0.40).
+
+---
+
+#### Phase 4: `portfolio` — Pre-Investment Revenue Benchmarks
+
+Using the investor shortlist as context, the pipeline searches for **what portfolio companies were earning BEFORE those investors funded them**.
+
+**Query planning focus:**
+- Pre-seed / seed / Series A traction metrics *before* the round closed
+- Investor firm names from the shortlist
+- Comparable product categories
+- ARR, MRR, revenue run-rate, or customers at time of investment
+
+**Exa structured output schema:**
+
+```json
+{
+  "benchmarks": [
+    {
+      "company": "PortfolioCo",
+      "investor": "Acme Ventures",
+      "round": "Seed",
+      "preInvestmentRevenue": "$800K ARR",
+      "metricType": "ARR",
+      "sourceNote": "TechCrunch article, 2023"
+    }
+  ]
+}
+```
+
+**Synthesis output:** Benchmark bullets (company | investor | round | pre-investment revenue | confidence), comparison to your company's metrics (only when numbers are present), and missing/low-confidence data flagged explicitly.
+
+**Cost tracked:** Exa portfolio search (~$0.30).
+
+---
+
+#### Phase 5: `partners` — Partner Contact Discovery
+
+The pipeline finds **named partners and GPs** at the target investor firms — with public contact information.
+
+**Exa query targets:**
+- Partner / General Partner / Investing Partner names
+- LinkedIn URLs (`linkedin.com/in/...`)
+- Public emails
+- Twitter/X profiles
+- Firm team pages and partner bios
+
+**Structured contact output:**
+
+```json
+{
+  "contacts": [
+    {
+      "name": "Jane Smith",
+      "firm": "Acme Ventures",
+      "role": "General Partner",
+      "linkedin": "https://linkedin.com/in/janesmith",
+      "email": "jane@acme.vc",
+      "twitter": "https://x.com/janesmith",
+      "otherSocials": [],
+      "sourceUrl": "https://acme.vc/team/jane-smith"
+    }
+  ]
+}
+```
+
+**Rules:** Deduplicate by name+firm. Prefer partners/GPs over analysts. Never fabricate contact details — empty strings for unknown fields.
+
+**Cost tracked:** Exa partner contacts (~$0.40).
+
+---
+
+#### Phase 6: `enrich` — Per-Person Contact Enrichment
+
+For each discovered contact, the pipeline runs an **individual targeted Exa search** to fill gaps in social profiles.
+
+**Per-person query template:**
+
+```
+"{Jane Smith}" "{Acme Ventures}" partner LinkedIn email Twitter X personal website social profile
+```
+
+**Additional queries:**
+- `site:linkedin.com/in` scoped search
+- `site:x.com OR site:twitter.com OR site:instagram.com`
+- Email/contact search
+
+**Merge logic:**
+- Extracts URLs and emails from Exa structured output + result highlights
+- Validates emails (no wildcards, no image extensions)
+- Identifies LinkedIn, Twitter/X, Instagram, personal websites, GitHub, Medium, Substack
+- Filters out firm domains from "personal website" detection
+- Preserves existing contact data; enrichment only fills gaps
+
+Configurable via:
+- `EXA_PERSON_ENRICHMENT_LIMIT` — cap how many contacts get enriched (0 = all)
+- `EXA_PERSON_SEARCH_DELAY_MS` — delay between searches (default 250ms)
+
+**Cost tracked:** Exa contact enrichment (~$0.05 × number of enriched contacts).
+
+---
+
+#### Phase 7: `report` — PDF Compilation & Upload
+
+All pipeline findings are compiled into a **branded HTML report** and rendered to PDF via Playwright.
+
+**Report sections (from `buildReportHtml`):**
+1. Product summary (from website analyst)
+2. Revenue / performance summary (from spreadsheet analyst)
+3. Investor shortlist with thesis fit
+4. Portfolio pre-investment revenue benchmarks
+5. Partner contacts with LinkedIn, email, Twitter links
+6. Source citations from Exa searches
+
+**PDF generation:**
+
+```typescript
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+await page.setContent(html, { waitUntil: "networkidle" });
+const pdfBytes = await page.pdf({
+  format: "A4",
+  printBackground: true,
+  margin: { top: "12mm", right: "10mm", bottom: "12mm", left: "10mm" },
+});
+```
+
+PDFs are **upload-only** — never written to local disk in production. Uploaded to Supabase at `demoforge/outreach/{slug}-outreach-{timestamp}.pdf`.
+
+**Cost tracked:** PDF compute (~$0.02).
+
+---
+
+### Internal Tools & Dependencies
+
+| Tool | Role in Outreach | Module |
+|------|-----------------|--------|
+| **Groq Compound** | Live website visit + product summary | `agents/websiteAnalyst.ts` |
+| **Groq (`gpt-oss-120b`)** | Revenue analysis, Exa query planning, result synthesis | All agent modules |
+| **Groq Key Pool** | Multi-key rotation with 429 cooldown fallback | `clients/groqClient.ts` |
+| **Exa Deep Search** | Investor, portfolio, partner, and person searches | `clients/exaClient.ts` |
+| **SheetJS (`xlsx`)** | Workbook loading (.xlsx, .csv, etc.) | `clients/sheetLoader.ts` |
+| **Playwright** | HTML → PDF rendering | `report/compileReport.ts` |
+| **Supabase Storage** | PDF hosting (`demoforge/outreach/`) | `report/storage.ts` |
+| **Temporal** | Durable workflow orchestration | `apps/orchestrator` |
+| **PostgreSQL** | Job state, step tracking | `@founderforge/db` |
+| **Zod** | Input/output validation | `schema.ts`, `@founderforge/schemas` |
+
+#### Required Environment Variables
+
+```bash
+# Groq — Compound (website) + OSS (analysis/synthesis)
+GROQ_API_KEY=...
+GROQ_API_KEY_1=...              # optional multi-key pool
+GROQ_API_KEY_2=...
+GROQ_COMPOUND_MODEL=groq/compound
+GROQ_SHEET_MODEL=openai/gpt-oss-120b
+GROQ_MIN_INTERVAL_MS=2500
+GROQ_MAX_CONCURRENCY=1
+
+# Exa — investor/contact search
+EXA_SEARCH_API_KEY=...
+EXA_SEARCH_TYPE=deep            # deep | deep-lite
+EXA_NUM_RESULTS=8
+EXA_CONTACT_NUM_RESULTS=10
+EXA_PERSON_SEARCH_TYPE=deep-lite
+EXA_PERSON_NUM_RESULTS=5
+EXA_PERSON_ENRICHMENT_LIMIT=0     # 0 = enrich all contacts
+EXA_PERSON_SEARCH_DELAY_MS=250
+
+# Supabase — PDF report storage
+OUTREACH_SUPABASE_URL=https://xxx.supabase.co
+OUTREACH_SUPABASE_SERVICE_ROLE_KEY=...
+OUTREACH_SUPABASE_STORAGE_BUCKET=demoforge
+OUTREACH_SUPABASE_OBJECT_PREFIX=outreach
+```
+
+---
+
+### A2MCP Request Body
+
+**Endpoint:** `POST /v1/services/outreach/jobs`
+
+**Price:** $2.49 (x402 `exact` scheme on X Layer)
+
+#### Full Request Example
+
+```json
+{
+  "input": {
+    "website_url": "https://www.notion.so",
+    "sheet_url": "https://cdn.example.com/revenue/notion-metrics.xlsx"
+  },
+  "callback_url": "https://your-app.com/webhooks/founderforge",
+  "priority": "normal"
+}
+```
+
+#### Input Schema (`OutreachInputSchema`)
+
+| Field | Required | Type | Constraints |
+|-------|----------|------|-------------|
+| `website_url` | **Yes** | `string (URL)` | Valid HTTPS/HTTP URL of the company website |
+| `sheet_url` | **Yes** (API) | `string (URL)` | Public URL to an `.xlsx`, `.xls`, or `.csv` workbook. Downloaded at runtime. Must be fetchable without auth. |
+| `sheet_path` | CLI only | `string` | Local filesystem path — **not available via A2MCP API**. Used by `live-run` scripts only. |
+
+Either `sheet_url` or `sheet_path` must be provided. For API/A2MCP calls, use `sheet_url`.
+
+#### Minimal Request
+
+```json
+{
+  "input": {
+    "website_url": "https://linear.app",
+    "sheet_url": "https://storage.example.com/linear-revenue-q2-2026.xlsx"
+  }
+}
+```
+
+#### cURL Example (local dev with payment bypass)
+
+```bash
+curl -X POST http://localhost:4021/v1/services/outreach/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Idempotency-Key: outreach-linear-$(date +%s)" \
+  -d '{
+    "input": {
+      "website_url": "https://linear.app",
+      "sheet_url": "https://cdn.example.com/metrics/linear-revenue.xlsx"
+    }
+  }'
+```
+
+#### Create Response (`202 Accepted`)
+
+```json
+{
+  "job_id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+  "list_price_usd": 2.49,
+  "eta_seconds": 900,
+  "status_url": "/v1/jobs/d4e5f6a7-b8c9-0123-def0-234567890123",
+  "status": "queued"
+}
+```
+
+#### Poll Response — In Progress
+
+```json
+{
+  "id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+  "service": "outreach",
+  "status": "running",
+  "step": "investors",
+  "artifacts": [],
+  "cost_breakdown": [],
+  "list_price_usd": 2.49,
+  "error": null,
+  "created_at": "2026-07-27T13:00:00.000Z",
+  "updated_at": "2026-07-27T13:04:00.000Z",
+  "eta_seconds": 900
+}
+```
+
+The `step` field reflects the current pipeline phase: `download_sheet` → `website` → `revenue` → `investors` → `portfolio` → `partners` → `enrich` → `report`.
+
+#### Poll Response — Completed
+
+```json
+{
+  "id": "d4e5f6a7-b8c9-0123-def0-234567890123",
+  "service": "outreach",
+  "status": "completed",
+  "step": "report",
+  "artifacts": [
+    {
+      "type": "pdf_report",
+      "url": "https://xxx.supabase.co/storage/v1/object/public/demoforge/outreach/notion-outreach-1730000000.pdf",
+      "object_key": "outreach/notion-outreach-1730000000.pdf",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "cost_breakdown": [
+    { "vendor": "llm", "operation": "website_compound", "amount_usd": 0.05 },
+    { "vendor": "llm", "operation": "revenue_sheet", "amount_usd": 0.03 },
+    { "vendor": "exa", "operation": "investor_search", "amount_usd": 0.40 },
+    { "vendor": "exa", "operation": "portfolio_search", "amount_usd": 0.30 },
+    { "vendor": "exa", "operation": "partner_contacts", "amount_usd": 0.40 },
+    { "vendor": "exa", "operation": "contact_enrichment", "amount_usd": 0.25, "units": 5 },
+    { "vendor": "compute", "operation": "pdf_report", "amount_usd": 0.02 }
+  ],
+  "list_price_usd": 2.49,
+  "error": null,
+  "created_at": "2026-07-27T13:00:00.000Z",
+  "updated_at": "2026-07-27T13:12:45.000Z",
+  "eta_seconds": 900
+}
+```
+
+The full job output (available in pipeline result) also includes structured sections: `website`, `revenue`, `investors`, `portfolioBenchmarks`, and `partnerContacts` with contact arrays, Exa source URLs, and synthesis summaries.
+
+---
+
+### Temporal Orchestration
+
+Outreach uses a **single-activity workflow** with an extended timeout to accommodate multiple Exa deep searches and per-person enrichment.
+
+```typescript
+// apps/orchestrator/src/workflows/outreach.ts
+export async function outreachWorkflow(input) {
+  await short.markJobRunning(input.job_id);
+
+  const result = await long.runOutreachActivity({
+    job_id: input.job_id,
+    website_url: input.website_url,
+    sheet_url: input.sheet_url,
+  });
+
+  await short.completeJob(input.job_id, {
+    artifacts: [{
+      type: "pdf_report",
+      url: result.pdf_url,
+      object_key: result.object_key,
+      mime_type: "application/pdf",
+    }],
+    cost_breakdown: result.cost_breakdown,
+  });
+}
+```
+
+| Activity Config | Value | Reason |
+|-----------------|-------|--------|
+| `startToCloseTimeout` | 45 minutes | Multiple Exa deep searches + per-person enrichment |
+| `heartbeatTimeout` | 5 minutes | Long-running Exa API calls |
+| `maximumAttempts` | 1 | Avoid duplicate Exa searches on retry |
+| Heartbeat interval | 30 seconds | Keeps activity alive during Exa polls |
+
+Step updates include optional `detail` (e.g., sheet URL, website URL) for richer job polling visibility.
+
+---
+
+### Error Handling & Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| `sheet_url` unreachable or non-200 | Hard fail at `download_sheet` |
+| Unsupported spreadsheet format | Hard fail in sheet loader |
+| Empty workbook (no sheets) | Hard fail |
+| Groq Compound returns empty summary | Hard fail at `website` |
+| Groq rate limit (429) | Key pool rotates to next key with cooldown |
+| All Groq keys exhausted | Hard fail after max attempts |
+| Exa API key missing | Hard fail at first Exa call |
+| Exa returns 0 investor results | Synthesis proceeds with "(no Exa results)" — low-confidence noted |
+| Contact synthesis returns 0 contacts | Hard fail at `partners` |
+| Individual enrichment search fails | Contact kept with pre-enrichment data; error logged |
+| Playwright/Chromium not installed | Auto-install attempted via `ensureChromiumInstalled()` |
+| Supabase not configured | Hard fail at `report` |
+| Duplicate job (same idempotency key) | Returns existing job |
+
+---
+
+### What Outreach Does NOT Do
+
+Clarity on scope boundaries:
+
+1. **No email sending** — Outreach produces intelligence, not outbound mail. You send the emails.
+2. **No CRM integration** — Contacts are in the PDF and structured JSON output. Import to your CRM manually.
+3. **No guaranteed contact accuracy** — Public social profiles only. Exa evidence is cited; fabricated emails are explicitly forbidden in prompts.
+4. **No private sheet auth** — `sheet_url` must be publicly fetchable. Use a presigned S3 URL or direct CDN link.
+5. **No warm intro automation** — Partner names and LinkedIn URLs are starting points for *your* network mapping.
+
+---
+
+### Sample Output
+
+<!-- Paste your outreach PDF link here -->
+
+---
+
+## Service 5 — Competitor Research
+
+> **Product name in. Full competitive intelligence report out.**
+
+Every founder has been asked: *"Who are your competitors?"* and stumbled through a half-researched answer. You know the big names. You don't know their pricing tiers, their feature gaps, where you sit on a positioning map, or what your SWOT actually looks like with evidence behind it.
+
+Competitor Research is FounderForge's **automated competitive intelligence engine** — the flagship pipeline that launched the platform. Send a product name and optional URL. The system discovers up to five direct competitors via multi-provider web search, fetches and cleans public vendor pages through Jina Reader, builds a category-specific feature comparison matrix, extracts pricing tiers from public pages, generates SWOT analysis with a positioning map, and delivers a **branded PDF report** with signed Supabase URL.
+
+No G2 subscription. No manual spreadsheet. No consultant retainer. **One API call. One report. Board-ready competitive analysis.**
+
+**Price:** $4.99 per call · **SLA:** 20 minutes · **Output:** Supabase-hosted competitor report PDF
+
+---
+
+### The Pitch
+
+Imagine commissioning a competitive analysis from a strategy consulting firm — competitor identification, feature matrix, pricing comparison, SWOT, positioning map — and getting it back in twenty minutes for less than a lunch.
+
+That is Competitor Research.
+
+You send `product_name: "Notion"` and `product_url: "https://www.notion.so"`. Five specialized agents run in sequence:
+
+1. **Competitor Finder** — searches the web (Serper → Brave → DuckDuckGo failover), ranks candidates with Groq, returns up to 5 direct competitors with confidence scores
+2. **Feature Diff** — selects category-appropriate comparison dimensions, scores each vendor yes/partial/no/unknown from public page evidence
+3. **Pricing Scraper** — extracts public tiers, pricing models (per-seat, freemium, contact-sales), and enterprise flags
+4. **Positioning Builder** — generates SWOT, a 2-axis positioning map (price vs. feature breadth), and evidence-backed recommendations
+5. **Report Compiler** — renders HTML → PDF via Playwright, uploads to Supabase
+
+Unlike the other services (single-activity workflows), Competitor Research uses **five separate Temporal activities** — each durable, retryable, and visible as a distinct job step when you poll.
+
+This is the report you bring to your investor meeting. This is the analysis you paste into your pitch deck appendix. This is how solo founders compete with teams that have dedicated competitive intelligence analysts.
+
+---
+
+### Pipeline Diagram
+
+```mermaid
+flowchart LR
+    subgraph Input["A2MCP Input"]
+        NAME["product_name"]
+        URL["product_url (optional)"]
+    end
+
+    subgraph Step1["Step 1 — findCompetitors"]
+        WS["Web Search (Serper/Brave/DDG)"]
+        Jina1["Jina Reader (product page)"]
+        GroqRank["Groq Rank & Filter"]
+        CompList["≤5 Competitors"]
+    end
+
+    subgraph Step2["Step 2 — diffFeatures"]
+        JinaFeat["Jina: / + /features + /product"]
+        GroqDims["Groq Category Features"]
+        GroqScore["Groq Per-Vendor Scoring"]
+        Matrix["Feature Matrix"]
+    end
+
+    subgraph Step3["Step 3 — scrapePricing"]
+        JinaPrice["Jina: /pricing + /plans"]
+        GroqPrice["Groq Tier Extraction"]
+        Heuristic["Regex Price Fallback"]
+        Pricing["Pricing Comparison"]
+    end
+
+    subgraph Step4["Step 4 — buildPositioning"]
+        DetMap["Deterministic Position Map"]
+        GroqSWOT["Groq SWOT + Recommendations"]
+        Position["Positioning Analysis"]
+    end
+
+    subgraph Step5["Step 5 — compileReport"]
+        HTML["HTML Report Template"]
+        PW["Playwright → PDF"]
+        SupaUp["Supabase Upload"]
+        PDF["Report PDF URL"]
+    end
+
+    NAME --> WS
+    URL --> Jina1
+    WS --> GroqRank --> CompList
+    Jina1 --> GroqRank
+    CompList --> JinaFeat
+    CompList --> JinaPrice
+    JinaFeat --> GroqDims --> GroqScore --> Matrix
+    JinaPrice --> GroqPrice --> Pricing
+    Heuristic --> Pricing
+    Matrix --> DetMap
+    Pricing --> DetMap
+    DetMap --> GroqSWOT --> Position
+    Matrix --> HTML
+    Pricing --> HTML
+    Position --> HTML
+    CompList --> HTML
+    HTML --> PW --> SupaUp --> PDF
+```
+
+---
+
+### End-to-End Sequence
+
+```mermaid
+sequenceDiagram
+    participant Agent as Calling Agent
+    participant GW as API Gateway
+    participant OKX as OKX x402
+    participant DB as Postgres
+    participant T as Temporal
+    participant CR as competitor-research activities
+    participant Search as Serper/Brave/DDG
+    participant Jina as Jina Reader
+    participant Groq as Groq (llm-core)
+    participant PW as Playwright
+    participant SB as Supabase
+
+    Agent->>GW: POST /v1/services/competitor-research/jobs
+    GW->>OKX: Verify $4.99 payment
+    OKX-->>GW: OK
+    GW->>DB: INSERT job (queued)
+    GW->>T: Start competitorResearchWorkflow
+    GW-->>Agent: 202 { job_id, eta_seconds: 1200 }
+
+    Note over T,CR: Activity 1: findCompetitors
+    T->>CR: findCompetitorsActivity
+    CR->>Search: 3 queries (alternatives, vs, competitors)
+    Search-->>CR: search hits
+    CR->>Jina: fetchPageJina(product_url)
+    Jina-->>CR: product excerpt
+    CR->>Groq: Rank candidates → JSON
+    Groq-->>CR: ≤5 competitors + confidence
+    CR->>DB: step=findCompetitors
+
+    Note over T,CR: Activity 2: diffFeatures
+    T->>CR: diffFeaturesActivity
+    loop Each vendor (product + competitors)
+        CR->>Jina: homepage + /features + /product
+        Jina-->>CR: cleaned markdown
+    end
+    CR->>Groq: selectComparisonFeatures (category dims)
+    loop Each vendor
+        CR->>Groq: scoreVendor (yes/partial/no/unknown)
+    end
+    CR-->>T: feature_diff matrix
+    CR->>DB: step=diffFeatures
+
+    Note over T,CR: Activity 3: scrapePricing
+    T->>CR: scrapePricingActivity
+    loop Each vendor
+        CR->>Jina: /pricing + /plans pages
+        Jina-->>CR: pricing markdown
+    end
+    CR->>Groq: Extract tiers + pricing_model
+    CR-->>T: pricing comparison
+    CR->>DB: step=scrapePricing
+
+    Note over T,CR: Activity 4: buildPositioning
+    T->>CR: buildPositioningActivity
+    CR->>CR: buildDeterministicMap (price × breadth)
+    CR->>Groq: SWOT + recommendations (strong tier)
+    Groq-->>CR: positioning analysis
+    CR->>DB: step=buildPositioning
+
+    Note over T,CR: Activity 5: compileReport
+    T->>CR: compileReportActivity
+    CR->>PW: HTML → PDF (A4)
+    PW-->>CR: PDF buffer
+    CR->>SB: upload reports/competitor-research/*.pdf
+    SB-->>CR: signed pdf_url
+    CR->>DB: job completed
+
+    Agent->>GW: GET /v1/jobs/{job_id}
+    GW-->>Agent: artifacts=[{ type: report_pdf, url }]
+```
+
+---
+
+### How It Works — Agent by Agent
+
+#### Agent 1: `findCompetitors` — Discovery & Ranking
+
+The pipeline starts by finding **real direct competitors** — same category, same ICP — not blog posts or review aggregators.
+
+**Web search (3 queries):**
+
+```
+{product_name} alternatives
+{product_name} vs competitors
+{product_name} competitors
+```
+
+Each query hits `@founderforge/connectors` `webSearch()` with **provider failover**:
+
+| Priority | Provider | Cost |
+|----------|----------|------|
+| 1 | Serper | ~$0.002/query |
+| 2 | Brave Search API | ~$0.003/query |
+| 3 | DuckDuckGo HTML | Free |
+
+**Product page context (optional):**
+
+If `product_url` is provided, Jina Reader fetches the homepage (first 2,500 chars) to ground category understanding.
+
+**Candidate filtering:**
+
+Results are filtered to exclude:
+- Same domain as the product
+- YouTube, Reddit, Wikipedia, LinkedIn, Facebook, X/Twitter
+- Review aggregators (G2, Capterra, GetApp) — often CAPTCHA-blocked
+
+**Groq ranking:**
+
+```json
+{
+  "competitors": [
+    {
+      "name": "Coda",
+      "url": "https://coda.io",
+      "confidence": 0.92,
+      "category_match": "collaborative workspace / docs"
+    }
+  ]
+}
+```
+
+Rules: 4–5 max, vendor homepages only, drop weak matches. If Groq fails, a heuristic fallback deduplicates by domain and ranks by hit frequency.
+
+---
+
+#### Agent 2: `diffFeatures` — Feature Comparison Matrix
+
+With competitors identified, the pipeline builds a **category-specific feature matrix**.
+
+**Evidence gathering (Jina Reader per vendor):**
+
+For each vendor (your product + up to 5 competitors), fetch:
+- Homepage (`/`)
+- Features page (`/features`, `/product`)
+
+Markdown is cleaned to strip nav, cookies, footers, and boilerplate — cutting tokens 40–60% with no signal loss.
+
+**Category feature selection (Groq):**
+
+One cheap LLM call analyzes your product page and returns 6–8 **category-appropriate comparison dimensions**:
+
+- PM tools → "Gantt charts", "Sprint boards", "Time tracking"
+- API platforms → "Rate limiting", "Webhook support", "SDK coverage"
+- Fallback → "Free plan", "Mobile apps", "API", "Integrations", "SSO", "AI features"
+
+**Per-vendor scoring (Groq, one call each):**
+
+For each vendor's page text, Groq assigns each feature:
+
+| Status | Meaning |
+|--------|---------|
+| `yes` | Text clearly shows the vendor offers it |
+| `partial` | Enterprise-only, add-on, or higher tier |
+| `no` | Text explicitly says unavailable |
+| `unknown` | Not mentioned — never guessed |
+
+Keyword heuristics backfill when LLM returns `unknown`.
+
+**Matrix pruning:**
+
+Features evidenced on fewer than 50% of vendors are dropped. Sparse rows are removed to keep the report actionable.
+
+**Output structure:**
+
+```json
+{
+  "features": ["Real-time collaboration", "API access", "SSO / SAML"],
+  "matrix": {
+    "Notion": {
+      "Real-time collaboration": { "status": "yes", "evidence_url": "https://notion.so/features" },
+      "API access": { "status": "partial", "evidence_url": "..." }
+    },
+    "Coda": { "...": "..." }
+  }
+}
+```
+
+---
+
+#### Agent 3: `scrapePricing` — Public Pricing Extraction
+
+Parallel in the workflow (sequential in pipeline to avoid Groq rate limits), this agent extracts **public pricing tiers** from vendor pages.
+
+**Evidence paths (Jina Reader):**
+
+```
+/pricing
+/plans
+```
+
+The fetch stops at the first page containing price signals (`$`, `/user`, `/seat`, `free`).
+
+**Groq extraction:**
+
+```json
+{
+  "product_pricing": {
+    "tiers": [
+      { "name": "Free", "price": 0, "currency": "USD" },
+      { "name": "Plus", "price": 10, "currency": "USD", "period": "month" },
+      { "name": "Business", "price": 18, "currency": "USD", "period": "month" }
+    ]
+  },
+  "competitor_pricing": [
+    {
+      "competitor": "Coda",
+      "tiers": [{ "name": "Pro", "price": 12, "currency": "USD", "period": "month" }],
+      "pricing_model": "per-seat",
+      "enterprise_custom": true
+    }
+  ]
+}
+```
+
+**Pricing models detected:** `per-seat`, `flat-rate`, `usage-based`, `freemium`, `contact-sales`
+
+**Heuristic fallback:** Regex price extraction (`$XX/user/mo`) + plan name detection (Free, Pro, Enterprise) when LLM fails. Never invents prices.
+
+---
+
+#### Agent 4: `buildPositioning` — SWOT & Positioning Map
+
+The positioning agent synthesizes feature and pricing evidence into strategic recommendations.
+
+**Deterministic positioning map (always computed):**
+
+A 2-axis scatter plot is built from evidence — never empty:
+
+| Axis | Source |
+|------|--------|
+| X — Monthly price | Lowest public list price per vendor |
+| Y — Feature breadth | Ratio of `yes` + 0.5×`partial` across matrix |
+
+Vendors with undisclosed pricing sit in the right "custom/enterprise" band.
+
+**Groq SWOT synthesis (strong tier):**
+
+```json
+{
+  "swot": {
+    "strengths": ["Evidence-backed capability X", "Competitive pricing at $Y/mo"],
+    "weaknesses": ["Gap in SSO vs. Competitor Z"],
+    "opportunities": ["Underserved segment where peers lack feature A"],
+    "threats": ["Competitor B's enterprise motion"]
+  },
+  "recommended_positioning": [
+    {
+      "angle": "Lead with real-time collaboration density",
+      "supporting_facts": ["Notion scores yes on 7/8 category features vs. Coda 5/8"]
+    }
+  ],
+  "risks": ["Limited public pricing for 2/5 competitors"]
+}
+```
+
+Rules: 3–4 recommendations, each must name a peer and cite concrete evidence. On Groq 429 rate limit, retries with fast tier; falls back to deterministic SWOT if both fail.
+
+---
+
+#### Agent 5: `compileReport` — PDF Generation & Delivery
+
+All findings are rendered into a **branded HTML template** and converted to PDF.
+
+**Report sections:**
+1. Executive summary
+2. Competitor overview (names, URLs, confidence, category match)
+3. Feature comparison matrix (color-coded yes/partial/no/unknown)
+4. Pricing comparison table
+5. Positioning map (2-axis chart)
+6. SWOT analysis
+7. Recommended positioning angles with supporting facts
+8. Risks and data gaps
+
+**PDF pipeline:**
+
+```typescript
+const browser = await chromium.launch({ headless: true });
+await page.setContent(html, { waitUntil: "networkidle" });
+const pdfBytes = await page.pdf({ format: "A4", printBackground: true });
+```
+
+Uploaded to Supabase Storage at `reports/competitor-research/{slug}-{timestamp}.pdf` with **signed URL** (default 7-day TTL via `REPORT_URL_TTL_SECONDS`).
+
+---
+
+### Internal Tools & Dependencies
+
+| Tool | Role in Competitor Research | Module |
+|------|----------------------------|--------|
+| **Serper / Brave / DuckDuckGo** | Competitor discovery web search (failover chain) | `@founderforge/connectors` |
+| **Jina Reader** | Public page fetch → cleaned markdown | `@founderforge/connectors` |
+| **Groq (`llm-core`)** | Ranking, feature scoring, pricing extraction, SWOT | `@founderforge/llm-core` |
+| **Playwright** | HTML → PDF rendering | `agents/compileReport.ts` |
+| **Supabase Storage** | PDF hosting (`reports` bucket) | `storage.ts` |
+| **Temporal** | Multi-activity durable workflow (5 activities) | `apps/orchestrator` |
+| **PostgreSQL** | Job state, per-step visibility | `@founderforge/db` |
+| **Zod** | Input/output validation | `schema.ts`, `@founderforge/schemas` |
+
+#### Groq Model Tiers (`@founderforge/llm-core`)
+
+| Tier | Used For |
+|------|----------|
+| `fast` | Competitor ranking, feature selection, per-vendor scoring, pricing extraction |
+| `strong` | SWOT synthesis and positioning recommendations |
+
+#### Required Environment Variables
+
+```bash
+# Web search (at least one required)
+SERPER_API_KEY=...
+BRAVE_SEARCH_API_KEY=...        # fallback
+# DuckDuckGo needs no key (last resort)
+
+# Jina Reader — page fetch
+JINA_API_KEY=...
+
+# Groq — all LLM agents
+GROQ_API_KEY=...
+
+# Supabase — PDF report storage
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_STORAGE_BUCKET=reports
+REPORT_URL_TTL_SECONDS=604800   # signed URL TTL (default 7 days)
+```
+
+---
+
+### A2MCP Request Body
+
+**Endpoint:** `POST /v1/services/competitor-research/jobs`
+
+**Price:** $4.99 (x402 `exact` scheme on X Layer)
+
+#### Full Request Example
+
+```json
+{
+  "input": {
+    "product_name": "Notion",
+    "product_url": "https://www.notion.so"
+  },
+  "callback_url": "https://your-app.com/webhooks/founderforge",
+  "priority": "normal"
+}
+```
+
+#### Input Schema (`CompetitorResearchInputSchema`)
+
+| Field | Required | Type | Constraints |
+|-------|----------|------|-------------|
+| `product_name` | **Yes** | `string` | Min 1 character — search anchor and report label |
+| `product_url` | Recommended | `string (URL)` | Valid URL — ground truth for category, features, and pricing. Strongly recommended for accuracy. |
+
+#### Minimal Request (name only)
+
+```json
+{
+  "input": {
+    "product_name": "Linear"
+  }
+}
+```
+
+Without `product_url`, the pipeline uses Google search as a fallback URL and relies entirely on web search hits for context. **Always provide `product_url` for best results.**
+
+#### cURL Example (local dev with payment bypass)
+
+```bash
+curl -X POST http://localhost:4021/v1/services/competitor-research/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Idempotency-Key: cr-notion-$(date +%s)" \
+  -d '{
+    "input": {
+      "product_name": "Notion",
+      "product_url": "https://www.notion.so"
+    }
+  }'
+```
+
+#### Create Response (`202 Accepted`)
+
+```json
+{
+  "job_id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+  "list_price_usd": 4.99,
+  "eta_seconds": 1200,
+  "status_url": "/v1/jobs/e5f6a7b8-c9d0-1234-ef01-345678901234",
+  "status": "queued"
+}
+```
+
+#### Poll Response — In Progress
+
+```json
+{
+  "id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+  "service": "competitor-research",
+  "status": "running",
+  "step": "scrapePricing",
+  "artifacts": [],
+  "cost_breakdown": [],
+  "list_price_usd": 4.99,
+  "error": null,
+  "created_at": "2026-07-27T14:00:00.000Z",
+  "updated_at": "2026-07-27T14:06:30.000Z",
+  "eta_seconds": 1200
+}
+```
+
+The `step` field reflects the current Temporal activity: `findCompetitors` → `diffFeatures` → `scrapePricing` → `buildPositioning` → `compileReport`.
+
+#### Poll Response — Completed
+
+```json
+{
+  "id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+  "service": "competitor-research",
+  "status": "completed",
+  "step": "compileReport",
+  "artifacts": [
+    {
+      "type": "report_pdf",
+      "url": "https://xxx.supabase.co/storage/v1/object/sign/reports/competitor-research/notion-1730000000.pdf?token=...",
+      "object_key": "competitor-research/notion-1730000000.pdf",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "cost_breakdown": [
+    { "vendor": "discovery", "operation": "findCompetitors", "amount_usd": 0.08 },
+    { "vendor": "scrape", "operation": "diffFeatures", "amount_usd": 0.12 },
+    { "vendor": "scrape", "operation": "scrapePricing", "amount_usd": 0.10 },
+    { "vendor": "llm-core", "operation": "buildPositioning", "amount_usd": 0.04 },
+    { "vendor": "render", "operation": "compileReport", "amount_usd": 0.01 }
+  ],
+  "list_price_usd": 4.99,
+  "error": null,
+  "created_at": "2026-07-27T14:00:00.000Z",
+  "updated_at": "2026-07-27T14:18:00.000Z",
+  "eta_seconds": 1200
+}
+```
+
+The full pipeline output also includes structured JSON: `competitors[]`, `feature_diff`, `pricing`, and `positioning` — usable programmatically without parsing the PDF.
+
+---
+
+### Temporal Orchestration — Multi-Activity Workflow
+
+Competitor Research is the **only FounderForge service** that uses a **multi-activity Temporal workflow** — five separate durable activities instead of one monolithic pipeline call.
+
+```typescript
+// apps/orchestrator/src/workflows/competitorResearch.ts
+export async function competitorResearchWorkflow(input) {
+  await short.markJobRunning(input.job_id);
+
+  const found = await medium.findCompetitorsActivity(productInput);
+  const features = await medium.diffFeaturesActivity({ input, competitors: found.competitors });
+  const pricing = await medium.scrapePricingActivity({ input, competitors: found.competitors });
+  const positioning = await short.buildPositioningActivity({ productName, feature_diff, pricing });
+  const report = await compile.compileReportActivity({ input, competitors, feature_diff, pricing, positioning });
+
+  await short.completeJob(input.job_id, { artifacts, cost_breakdown });
+}
+```
+
+| Activity | Timeout | Retries | Purpose |
+|----------|---------|---------|---------|
+| `findCompetitorsActivity` | 10 min | 3 | Web search + Groq ranking |
+| `diffFeaturesActivity` | 10 min | 3 | Jina fetch + feature matrix |
+| `scrapePricingActivity` | 10 min | 3 | Jina fetch + pricing extraction |
+| `buildPositioningActivity` | 5 min | 3 | SWOT + positioning map |
+| `compileReportActivity` | 5 min | 2 | Playwright PDF + Supabase upload |
+
+**Why multi-activity?**
+
+1. **Step visibility** — Poll shows exactly which agent is running (`step: "scrapePricing"`)
+2. **Independent retries** — A failed pricing scrape doesn't re-run competitor discovery
+3. **Rate limit isolation** — Feature diff and pricing run sequentially to avoid stacking Groq TPM bursts
+4. **Temporal durability** — Each activity checkpoint survives worker restarts
+
+---
+
+### Error Handling & Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| All search providers fail | Hard fail at `findCompetitors` |
+| Zero search candidates | Hard fail — "no search candidates found" |
+| Groq ranking fails | Heuristic domain-deduplication fallback |
+| Zero competitors after fallback | Hard fail |
+| Jina fetch fails for a vendor | Try next path (`/features`, `/product`, `/pricing`) |
+| All Jina fetches fail for vendor | Empty evidence — features scored as `unknown` |
+| Feature selection LLM fails | Generic 6-dimension fallback (Free plan, API, SSO, etc.) |
+| Per-vendor scoring LLM fails | Keyword heuristic fallback |
+| Pricing LLM fails | Regex + plan-name heuristic extraction |
+| Positioning LLM 429 | 2.5s pause → retry with fast tier |
+| Positioning retry fails | Deterministic SWOT fallback (map still populated) |
+| Supabase not configured | Hard fail at `compileReport` |
+| `compileReport` missing pdf_url | Non-retryable Temporal failure |
+| Duplicate job (same idempotency key) | Returns existing job |
+
+---
+
+### Data Sources & Limitations
+
+**What the report uses:**
+- Public vendor websites only (homepage, features, pricing pages)
+- First-party content via Jina Reader — no review site scraping
+- Web search results for competitor discovery
+
+**What the report does NOT include:**
+- Private/confidential pricing (contact-sales vendors marked accordingly)
+- Real-time revenue or funding data
+- Customer reviews or NPS scores
+- Non-public feature roadmaps
+- Patent or IP analysis
+
+Every claim in the report traces to a public URL in the evidence matrix. When data is unavailable, the report marks it `unknown` or `contact-sales` — never fabricated.
+
+---
+
+### Sample Output
+
+<!-- Paste your competitor research PDF link here -->
+
+---
+
+## Service 6 — Brand Kit
+
+> **Brand name + brief in. Complete brand identity ZIP out.**
+
+Before you ship, before you launch, before you put anything on Product Hunt — you need to look like you exist. Not like you hacked together a logo in Canva at 3 AM. Like a real company with a real visual identity: logo, colors, fonts, favicons, social banners, and a brand guide you can hand to any designer or developer.
+
+Brand Kit is FounderForge's **generative brand identity engine**. Send a brand name and a creative brief. Vertex AI Gemini analyzes the brief and proposes logo concept angles with a curated Google Fonts pairing. Gemini's image model generates multiple logo concepts. node-vibrant extracts a real color palette from your chosen mark. Google Fonts are downloaded as TTF files. sharp renders icons, favicons, and specimen images. Vertex generates full-bleed social banners. Everything is zipped and uploaded to Supabase — ready to download, deploy, and ship.
+
+No design agency. No Fiverr roulette. No $2,000 brand workshop. **One API call. One ZIP. A complete brand.**
+
+**Price:** $3.99 per call · **SLA:** 15 minutes · **Output:** Supabase-hosted brand kit ZIP
+
+---
+
+### The Pitch
+
+Imagine walking into a brand identity presentation — three logo concepts, color palette, typography specimen, favicon set, Open Graph image, Twitter banner, LinkedIn banner, CSS typography file, downloaded font files, and a JSON brand guide — fifteen minutes after typing two sentences about your product.
+
+That is Brand Kit.
+
+You send:
+
+```json
+{
+  "brand_name": "Solace",
+  "description": "calm meditation app, minimalist, organic, wellness",
+  "pick": 0
+}
+```
+
+Gemini analyzes the brief and returns three distinct logo concept angles (wordmark, symbol mark, emblem — tailored to *your* brand, not generic templates). Gemini's image model renders each concept as a flat vector PNG on white. You pick one (`pick: 0` selects the first; all concepts are included in the ZIP). The palette is extracted from the actual logo pixels — not invented. Typography is locked to a curated Google Fonts allowlist (~40 families) so every font name is real and downloadable. Icons are sharp-resized from your logo. Social banners are AI-generated full-bleed compositions that incorporate your mark — then cropped to exact pixel dimensions.
+
+The ZIP lands on Supabase. Unzip it. Ship it.
+
+**This is the brand identity a solo founder needs on day zero.**
+
+---
+
+### Pipeline Diagram
+
+```mermaid
+flowchart LR
+    subgraph Input["A2MCP Input"]
+        NAME["brand_name"]
+        DESC["description"]
+        PICK["pick (0–5)"]
+    end
+
+    subgraph Phase1["Phase 1 — analyze"]
+        GeminiText["Vertex Gemini (text)"]
+        Concepts["Logo Concept Angles"]
+        TypoChoice["Google Fonts Pairing"]
+    end
+
+    subgraph Phase2["Phase 2 — logos"]
+        GeminiImg["Vertex Gemini (image)"]
+        LogoPNG["3 Logo Concept PNGs"]
+    end
+
+    subgraph Phase3["Phase 3 — palette"]
+        Vibrant["node-vibrant"]
+        Palette["5-Color Palette"]
+    end
+
+    subgraph Phase4["Phase 4 — fonts"]
+        GFApi["Google Fonts API"]
+        TTF["Downloaded .ttf Files"]
+        CSS["typography.css + .html"]
+    end
+
+    subgraph Phase5["Phase 5 — visuals"]
+        SharpVis["sharp SVG → PNG"]
+        ColorPNG["brand-colors.png"]
+        TypoPNG["typography-specimen.png"]
+    end
+
+    subgraph Phase6["Phase 6 — assets"]
+        SharpIcon["sharp Icon Resize"]
+        GeminiBan["Vertex Banner Generation"]
+        Icons["Favicons + App Icons"]
+        Banners["OG / Twitter / LinkedIn"]
+    end
+
+    subgraph Phase7["Phase 7 — zip + upload"]
+        Zip["ZIP Archive"]
+        SupaUp["Supabase Upload"]
+        ZIPURL["Brand Kit ZIP URL"]
+    end
+
+    NAME --> GeminiText
+    DESC --> GeminiText
+    GeminiText --> Concepts --> GeminiImg
+    GeminiText --> TypoChoice
+    PICK --> GeminiImg
+    GeminiImg --> LogoPNG --> Vibrant --> Palette
+    TypoChoice --> GFApi --> TTF
+    GFApi --> CSS
+    Palette --> SharpVis --> ColorPNG
+    TypoChoice --> SharpVis --> TypoPNG
+    LogoPNG --> SharpIcon --> Icons
+    LogoPNG --> GeminiBan --> Banners
+    Concepts --> Zip
+    LogoPNG --> Zip
+    ColorPNG --> Zip
+    TypoPNG --> Zip
+    TTF --> Zip
+    CSS --> Zip
+    Icons --> Zip
+    Banners --> Zip
+    Zip --> SupaUp --> ZIPURL
+```
+
+---
+
+### End-to-End Sequence
+
+```mermaid
+sequenceDiagram
+    participant Agent as Calling Agent
+    participant GW as API Gateway
+    participant OKX as OKX x402
+    participant DB as Postgres
+    participant T as Temporal
+    participant BK as brand-kit pipeline
+    participant Vertex as Vertex AI Gemini
+    participant GF as Google Fonts API
+    participant Sharp as sharp / node-vibrant
+    participant SB as Supabase
+
+    Agent->>GW: POST /v1/services/brand-kit/jobs
+    GW->>OKX: Verify $3.99 payment
+    OKX-->>GW: OK
+    GW->>DB: INSERT job (queued)
+    GW->>T: Start brandKitWorkflow
+    GW-->>Agent: 202 { job_id, eta_seconds: 900 }
+
+    T->>BK: runBrandKitActivity
+
+    Note over BK,Vertex: Step: analyze
+    BK->>Vertex: Brand brief → concept angles + typography (JSON schema)
+    Vertex-->>BK: 3 concepts + heading/body font pairing
+
+    Note over BK,Vertex: Step: logos
+    loop Each concept angle
+        BK->>Vertex: gemini-2.5-flash-image (1:1, flat vector)
+        Vertex-->>BK: logo PNG buffer
+    end
+    BK->>BK: Select concept[pick] as primary mark
+
+    Note over BK,Sharp: Step: palette
+    BK->>Sharp: node-vibrant color extraction from logo
+    Sharp-->>BK: primary, secondary, accent, light, dark
+
+    Note over BK,GF: Step: fonts
+    BK->>GF: Resolve + download heading + body TTF files
+    GF-->>BK: font files + CSS stylesheet URL
+
+    Note over BK,Sharp: Step: visuals
+    BK->>Sharp: Render brand-colors.png + typography-specimen.png
+
+    Note over BK,Vertex: Step: assets
+    BK->>Sharp: Resize icons (16–1024px) + favicon.ico
+    loop 3 social banners
+        BK->>Vertex: Full-bleed banner (logo as reference image)
+        Vertex-->>BK: banner image → crop to exact pixels
+    end
+
+    Note over BK,SB: Step: zip + upload
+    BK->>BK: Bundle all files into ZIP
+    BK->>SB: POST demoforge/brandkit/*.zip
+    SB-->>BK: zip_url
+
+    BK->>DB: UPDATE job → completed
+    BK-->>T: { zip_url, chosen_concept, palette, typography }
+
+    Agent->>GW: GET /v1/jobs/{job_id}
+    GW-->>Agent: artifacts=[{ type: brand_kit_zip, url }]
+```
+
+---
+
+### How It Works — Phase by Phase
+
+#### Phase 1: `analyze` — Brand Brief Analysis
+
+The pipeline starts by turning your creative brief into structured creative direction.
+
+**Vertex AI Gemini (text model: `gemini-3.1-flash-lite`)** receives the brand name and description with a senior brand designer prompt. Output is enforced via JSON schema:
+
+```json
+{
+  "concepts": [
+    {
+      "id": "wordmark",
+      "needsText": true,
+      "style": "Clean geometric sans-serif wordmark with rounded terminals, evoking calm and breath..."
+    },
+    {
+      "id": "lotus-mark",
+      "needsText": false,
+      "style": "Minimal single-line lotus icon, organic curves, flat vector..."
+    },
+    {
+      "id": "initials-badge",
+      "needsText": true,
+      "style": "Circular badge with stylized 'S' monogram, wellness spa aesthetic..."
+    }
+  ],
+  "typography": {
+    "heading": "Fraunces",
+    "body": "Source Sans 3",
+    "mood": "calm-organic"
+  }
+}
+```
+
+**Concept rules:**
+- Each concept must feel specific to *this* brand — not generic stock recipes
+- Vary approaches (wordmark, symbol, monogram, emblem, pictorial, badge) when they fit
+- `needsText: true` only when the logo must include readable brand name lettering
+- `style` is a dense visual direction sentence for the image model
+
+**Typography rules:**
+- Heading and body fonts **must** come from a curated Google Fonts allowlist (~22 heading + ~18 body families)
+- Enforced via JSON-schema `enum` — Gemini cannot hallucinate font names
+- Near-misses are snapped to canonical allowlist names via `canonicalizeHeadingFont()` / `canonicalizeBodyFont()`
+
+---
+
+#### Phase 2: `logos` — AI Logo Generation
+
+Each concept angle is rendered by **Vertex AI Gemini image model** (`gemini-2.5-flash-image`).
+
+**Generation config:**
+
+```typescript
+{
+  model: "gemini-2.5-flash-image",
+  config: {
+    responseModalities: ["TEXT", "IMAGE"],
+    imageConfig: { aspectRatio: "1:1" },
+  },
+}
+```
+
+**Prompt variants:**
+
+| `needsText` | Prompt focus |
+|-------------|-------------|
+| `true` | Brand name must appear exactly as spelled, legible lettering |
+| `false` | Icon-only — no letters, words, or signatures |
+
+Both variants enforce: square composition, flat vector aesthetic, high contrast, plain white background. No mockups, photography, 3D, or watermarks.
+
+**Pacing:** `waitBetweenSteps()` pauses between image generations to respect Vertex rate limits.
+
+**Concept selection:** The `pick` input (0–5) selects the primary mark for palette extraction and asset generation. **All concepts** are included in the ZIP under `concepts/`.
+
+---
+
+#### Phase 3: `palette` — Color Extraction
+
+Colors are extracted from the **actual chosen logo pixels** — not invented by an LLM.
+
+**node-vibrant** analyzes the logo PNG and maps swatches to brand roles:
+
+| Role | Source Swatch |
+|------|--------------|
+| `primary` | Vibrant or DarkVibrant |
+| `secondary` | Muted or LightVibrant |
+| `accent` | DarkVibrant or Vibrant |
+| `light` | LightMuted (fallback: `#F5F5F5`) |
+| `dark` | DarkMuted (fallback: `#0A0A0A`) |
+
+Typography from the analyst phase passes through unchanged — fonts were already locked to Google Fonts in Phase 1.
+
+---
+
+#### Phase 4: `fonts` — Google Fonts Resolution & Download
+
+The pipeline resolves both heading and body fonts via the **Google Fonts CSS API**:
+
+1. **Confirm availability** — fetch CSS stylesheet, verify `@font-face` blocks exist
+2. **Build stylesheet URL** — `https://fonts.googleapis.com/css?family=...&display=swap`
+3. **Download TTF files** — parse CSS, fetch `.ttf` sources for weights 400, 600, 700
+4. **Generate deliverables:**
+   - `typography.css` — ready-to-use `@font-face` declarations + CSS custom properties
+   - `typography.html` — live preview page with both fonts rendered
+
+Font files are included in the ZIP at `fonts/heading-*.ttf` and `fonts/body-*.ttf`.
+
+If a font is not on Google Fonts (shouldn't happen due to allowlist), the pipeline logs a warning and continues with available fonts.
+
+---
+
+#### Phase 5: `visuals` — Brand Visual Specimens
+
+Two shareable PNG images are rendered via **SVG → sharp rasterization**:
+
+**`brand-colors.png`** (1600×520)
+- Full-bleed equal-width color blocks
+- Each block labeled with role name + hex code
+- Text color auto-selected for contrast (black or white based on luminance)
+
+**`typography-specimen.png`**
+- Heading font sample at display size (uses downloaded TTF if available)
+- Body font sample at readable size
+- Brand name, font family names, and mood label
+
+These are reference images for designers, pitch decks, and brand guidelines.
+
+---
+
+#### Phase 6: `assets` — Icons & Social Banners
+
+**Icons (sharp resize from chosen logo):**
+
+| File | Size |
+|------|------|
+| `favicon-16x16.png` | 16×16 |
+| `favicon-32x32.png` | 32×32 |
+| `favicon-48x48.png` | 48×48 |
+| `favicon.ico` | Multi-size ICO (16+32+48) |
+| `apple-touch-icon.png` | 180×180 |
+| `android-chrome-192x192.png` | 192×192 |
+| `app-icon-512x512.png` | 512×512 |
+| `app-icon-1024x1024.png` | 1024×1024 |
+
+**Social banners (Vertex AI image generation + sharp crop):**
+
+| File | Dimensions | Aspect | Purpose |
+|------|-----------|--------|---------|
+| `og-image-1200x630.png` | 1200×630 | 16:9 → crop | Open Graph / social share |
+| `twitter-banner-1500x500.png` | 1500×500 | 21:9 → crop | Twitter / X profile |
+| `linkedin-banner-1584x396.png` | 1584×396 | 21:9 → crop | LinkedIn company banner |
+
+Banner generation uses the **chosen logo as a reference image** (multimodal input) plus palette colors and typography mood. Prompts enforce full-bleed edge-to-edge compositions — no tiny centered logo on blank space. Generated at supported aspect ratio, then cropped to exact pixel dimensions via sharp.
+
+---
+
+#### Phase 7: `zip` + `upload` — Delivery
+
+All assets are bundled into a single ZIP archive and uploaded to Supabase.
+
+**ZIP contents:**
+
+```
+solace-brand-kit.zip
+├── assets/
+│   ├── favicon-16x16.png
+│   ├── favicon-32x32.png
+│   ├── favicon-48x48.png
+│   ├── favicon.ico
+│   ├── apple-touch-icon.png
+│   ├── android-chrome-192x192.png
+│   ├── app-icon-512x512.png
+│   ├── app-icon-1024x1024.png
+│   ├── og-image-1200x630.png
+│   ├── twitter-banner-1500x500.png
+│   └── linkedin-banner-1584x396.png
+├── concepts/
+│   ├── wordmark.png
+│   ├── lotus-mark.png
+│   └── initials-badge.png
+├── fonts/
+│   ├── heading-Fraunces-400.ttf
+│   ├── heading-Fraunces-600.ttf
+│   ├── body-SourceSans3-400.ttf
+│   └── body-SourceSans3-600.ttf
+├── brand-colors.png
+├── typography-specimen.png
+├── typography.css
+├── typography.html
+├── brand-guide.json
+└── analysis.json
+```
+
+**`brand-guide.json`** — machine-readable brand spec (palette, typography, chosen concept, font file paths, Google Fonts stylesheet URL).
+
+**`analysis.json`** — raw analyst output (all concept angles, typography mood, rationale).
+
+Uploaded to `demoforge/brandkit/{timestamp}-{uuid}-{slug}-brand-kit.zip`.
+
+---
+
+### Internal Tools & Dependencies
+
+| Tool | Role in Brand Kit | Module |
+|------|------------------|--------|
+| **Vertex AI Gemini (text)** | Brand brief analysis, concept angles, typography pairing | `agents/brandAnalyst.ts` |
+| **Vertex AI Gemini (image)** | Logo generation + social banner generation | `agents/logoGenerator.ts`, `report/assetSizer.ts` |
+| **node-vibrant** | Color palette extraction from logo pixels | `agents/paletteTypography.ts` |
+| **Google Fonts API** | Font resolution, CSS URL, TTF download | `fonts/googleFonts.ts` |
+| **sharp** | Icon resize, banner crop, SVG → PNG rasterization | `report/assetSizer.ts`, `report/brandVisuals.ts` |
+| **png-to-ico** | Multi-size favicon.ico generation | `report/assetSizer.ts` |
+| **archiver (ZIP)** | Brand kit bundling | `report/zipper.ts` |
+| **Supabase Storage** | ZIP hosting (`demoforge/brandkit/`) | `report/storage.ts` |
+| **Temporal** | Single-activity durable workflow | `apps/orchestrator` |
+| **PostgreSQL** | Job state, step tracking | `@founderforge/db` |
+| **Zod** | Input/output validation | `schema.ts`, `@founderforge/schemas` |
+
+#### Required Environment Variables
+
+```bash
+# Vertex AI — text + image generation
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_CLOUD_LOCATION=global
+GEMINI_TEXT_MODEL=gemini-3.1-flash-lite
+GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
+
+# Supabase — ZIP delivery
+BRANDKIT_SUPABASE_URL=https://xxx.supabase.co
+BRANDKIT_SUPABASE_SERVICE_ROLE_KEY=...
+BRANDKIT_SUPABASE_STORAGE_BUCKET=demoforge
+BRANDKIT_SUPABASE_OBJECT_PREFIX=brandkit
+BRANDKIT_SUPABASE_SIGNED_URL_EXPIRES_IN=0   # 0 = public URL
+```
+
+---
+
+### A2MCP Request Body
+
+**Endpoint:** `POST /v1/services/brand-kit/jobs`
+
+**Price:** $3.99 (x402 `exact` scheme on X Layer)
+
+#### Full Request Example
+
+```json
+{
+  "input": {
+    "brand_name": "Solace",
+    "description": "calm meditation app, minimalist, organic, wellness",
+    "pick": 0
+  },
+  "callback_url": "https://your-app.com/webhooks/founderforge",
+  "priority": "normal"
+}
+```
+
+#### Input Schema (`BrandKitInputSchema`)
+
+| Field | Required | Type | Default | Constraints |
+|-------|----------|------|---------|-------------|
+| `brand_name` | **Yes** | `string` | — | 1–80 characters |
+| `description` | **Yes** | `string` | — | 10–2,000 characters — creative brief for the brand (mood, audience, aesthetic, industry) |
+| `pick` | No | `integer` | `0` | 0–5 — index of logo concept to use as primary mark (all concepts included in ZIP) |
+
+#### Minimal Request
+
+```json
+{
+  "input": {
+    "brand_name": "Forge",
+    "description": "AI-powered marketing suite for solo founders, bold and modern, developer-friendly"
+  }
+}
+```
+
+#### cURL Example (local dev with payment bypass)
+
+```bash
+curl -X POST http://localhost:4021/v1/services/brand-kit/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Idempotency-Key: bk-solace-$(date +%s)" \
+  -d '{
+    "input": {
+      "brand_name": "Solace",
+      "description": "calm meditation app, minimalist, organic, wellness",
+      "pick": 0
+    }
+  }'
+```
+
+#### Create Response (`202 Accepted`)
+
+```json
+{
+  "job_id": "f6a7b8c9-d0e1-2345-f012-456789012345",
+  "list_price_usd": 3.99,
+  "eta_seconds": 900,
+  "status_url": "/v1/jobs/f6a7b8c9-d0e1-2345-f012-456789012345",
+  "status": "queued"
+}
+```
+
+#### Poll Response — In Progress
+
+```json
+{
+  "id": "f6a7b8c9-d0e1-2345-f012-456789012345",
+  "service": "brand-kit",
+  "status": "running",
+  "step": "logos",
+  "artifacts": [],
+  "cost_breakdown": [],
+  "list_price_usd": 3.99,
+  "error": null,
+  "created_at": "2026-07-27T15:00:00.000Z",
+  "updated_at": "2026-07-27T15:03:00.000Z",
+  "eta_seconds": 900
+}
+```
+
+The `step` field reflects the current pipeline phase: `analyze` → `logos` → `palette` → `fonts` → `visuals` → `assets` → `zip` → `upload`.
+
+#### Poll Response — Completed
+
+```json
+{
+  "id": "f6a7b8c9-d0e1-2345-f012-456789012345",
+  "service": "brand-kit",
+  "status": "completed",
+  "step": "upload",
+  "artifacts": [
+    {
+      "type": "brand_kit_zip",
+      "url": "https://xxx.supabase.co/storage/v1/object/public/demoforge/brandkit/2026-07-27T15-10-00-abc12345-solace-brand-kit.zip",
+      "object_key": "brandkit/2026-07-27T15-10-00-abc12345-solace-brand-kit.zip",
+      "mime_type": "application/zip"
+    }
+  ],
+  "cost_breakdown": [],
+  "list_price_usd": 3.99,
+  "error": null,
+  "created_at": "2026-07-27T15:00:00.000Z",
+  "updated_at": "2026-07-27T15:10:30.000Z",
+  "eta_seconds": 900
+}
+```
+
+The job output also includes `chosen_concept`, `palette`, and `typography` objects for programmatic use without unzipping.
+
+---
+
+### Temporal Orchestration
+
+Brand Kit uses a **single-activity workflow** — one durable Temporal activity wraps the entire `runPipeline()` call, including multiple Vertex AI image generations.
+
+```typescript
+// apps/orchestrator/src/workflows/brandKit.ts
+export async function brandKitWorkflow(input) {
+  await short.markJobRunning(input.job_id);
+
+  const result = await long.runBrandKitActivity({
+    job_id: input.job_id,
+    brand_name: input.brand_name,
+    description: input.description,
+    pick: input.pick,
+  });
+
+  await short.completeJob(input.job_id, {
+    artifacts: [{
+      type: "brand_kit_zip",
+      url: result.zip_url,
+      object_key: result.object_key,
+      mime_type: "application/zip",
+    }],
+    cost_breakdown: result.cost_breakdown,
+  });
+}
+```
+
+| Activity Config | Value | Reason |
+|-----------------|-------|--------|
+| `startToCloseTimeout` | 45 minutes | Multiple Vertex image generations (logos + 3 banners) |
+| `heartbeatTimeout` | 5 minutes | Long image generation calls |
+| `maximumAttempts` | 1 | Avoid duplicate image generation on retry |
+| Heartbeat interval | 30 seconds | Keeps activity alive during Vertex calls |
+
+Inside the activity, `onStep` callbacks update the job's `step` field and emit heartbeats with the current phase.
+
+---
+
+### Error Handling & Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| `GOOGLE_SERVICE_ACCOUNT_JSON` missing/invalid | Hard fail at pipeline start |
+| Brand analyst returns non-JSON | Hard fail at `analyze` |
+| Font name outside allowlist | Snapped to nearest canonical name |
+| Vertex returns no image for a concept | Hard fail for that concept |
+| `pick` index out of range | Falls back to first concept (`concepts[0]`) |
+| Google Font not available | Logged warning; continues without TTF files for that font |
+| Banner generation fails | Hard fail for that banner |
+| Empty ZIP buffer | Hard fail at upload |
+| Supabase not configured | Hard fail at `upload` |
+| Vertex rate limit | `waitBetweenSteps()` + `generateContentWithRetry()` with backoff |
+| Duplicate job (same idempotency key) | Returns existing job |
+
+---
+
+### The `pick` Parameter — Choosing Your Logo
+
+Brand Kit generates **3 logo concepts** by default. The `pick` parameter selects which one drives palette extraction, icon generation, and banner composition.
+
+| `pick` | Behavior |
+|--------|----------|
+| `0` (default) | First concept is the primary mark |
+| `1` | Second concept is the primary mark |
+| `2` | Third concept is the primary mark |
+
+**All concepts are always included** in `concepts/` inside the ZIP — `pick` only affects which mark is used for downstream assets. To compare options, run once with `pick: 0`, review all three in the ZIP, then re-run with your preferred index if needed.
+
+---
+
+### Sample Output
+
+<!-- Paste your brand kit ZIP link here -->
+
+---
+
+## Universal API Reference
+
+All six services share the same HTTP contract. Pay once on job creation; poll for free until artifacts are ready.
+
+**Base URL:** `https://your-domain` (local dev: `http://localhost:4021`)
+
+---
+
+### Endpoints
+
+| Method | Path | Paid? | Description |
+|--------|------|-------|-------------|
+| `GET` | `/health` | Free | Gateway health + service list |
+| `GET` | `/v1/services` | Free | Catalog with prices and SLAs |
+| `POST` | `/v1/services/{service}/jobs` | **Paid** (x402) | Create async job → `202` |
+| `GET` | `/v1/jobs/{jobId}` | Free | Poll status, step, artifacts |
+
+---
+
+### Headers
+
+| Header | Required | Purpose |
+|--------|----------|---------|
+| `Content-Type: application/json` | On `POST` | Request body is JSON |
+| `X-Idempotency-Key` | Recommended | Dedupes job creation per service on retry |
+| Payment proof headers | When payments enabled | OKX x402 replay after settlement |
+
+---
+
+### Create Job — Request Envelope
+
+Every paid call uses the same outer body:
+
+```json
+{
+  "input": { /* service-specific — see table below */ },
+  "callback_url": "https://your-app.com/webhooks/founderforge",
+  "priority": "normal"
+}
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `input` | Yes | Validated per service (Zod) |
+| `callback_url` | No | Optional webhook on completion |
+| `priority` | No | `"low"` \| `"normal"` \| `"high"` (default `"normal"`) |
+
+**Response (`202 Accepted`):**
+
+```json
+{
+  "job_id": "uuid",
+  "list_price_usd": 4.99,
+  "eta_seconds": 1200,
+  "status_url": "/v1/jobs/uuid",
+  "status": "queued"
+}
+```
+
+Unpaid requests to job-create routes return **`402 Payment Required`** with a `PAYMENT-REQUIRED` header (base64 x402 v2 challenge). Set `PAYMENTS_BYPASS=true` locally to skip payment.
+
+---
+
+### Poll Job — Response
+
+```json
+{
+  "id": "uuid",
+  "service": "competitor-research",
+  "status": "running",
+  "step": "scrapePricing",
+  "artifacts": [],
+  "cost_breakdown": [],
+  "list_price_usd": 4.99,
+  "error": null,
+  "created_at": "2026-07-27T10:00:00.000Z",
+  "updated_at": "2026-07-27T10:05:00.000Z",
+  "eta_seconds": 1200
+}
+```
+
+**Job statuses:** `queued` → `running` → `completed` | `failed` | `cancelled`
+
+When `status` is `completed`, `artifacts[]` holds download URLs (`video`, `pdf_report`, `report_pdf`, `brand_kit_zip`, etc.).
+
+---
+
+### Service Catalog & Input Schemas
+
+| Service slug | Price | SLA | `input` fields |
+|--------------|-------|-----|----------------|
+| `promo-video` | $2.99 | 15 min | `product_url` · `duration?` · `resolution?` · `max_pages?` |
+| `automated-product-demo` | $4.99 | 30 min | `website_url` · `script` |
+| `social-listening` | $1.99 | 15 min | `product_url` · `max_posts?` |
+| `outreach` | $2.49 | 15 min | `website_url` · `sheet_url` |
+| `competitor-research` | $4.99 | 20 min | `product_name` · `product_url?` |
+| `brand-kit` | $3.99 | 15 min | `brand_name` · `description` · `pick?` |
+
+**Example — create + poll:**
+
+```bash
+# Create (paid)
+curl -X POST http://localhost:4021/v1/services/promo-video/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Idempotency-Key: my-job-1" \
+  -d '{"input":{"product_url":"https://linear.app"}}'
+
+# Poll (free)
+curl http://localhost:4021/v1/jobs/{job_id}
+```
+
+**List catalog:**
+
+```bash
+curl http://localhost:4021/v1/services
+```
+
+---
+
+### Common Errors
+
+| HTTP | `error` | Meaning |
+|------|---------|---------|
+| `402` | `payment_required` | No valid x402 payment on paid route |
+| `400` | `invalid_body` | Malformed JSON envelope |
+| `400` | `invalid_input` | Service `input` failed Zod validation |
+| `404` | `unknown_service` | Bad `:service` slug |
+| `404` | `not_found` | Unknown `job_id` |
+
+Per-service request examples and artifact shapes are documented in each service section above.
+
+---
+
+## Conclusion
+
+We are watching the birth of a new kind of company.
+
+One person. One laptop. One product that should not be possible at that scale — and yet it ships, it grows, it wins. The solo founder is no longer a side project archetype. They are the fastest-moving builders on earth, backed by AI that collapsed the cost of code, design, and infrastructure overnight.
+
+But distribution did not collapse with them.
+
+Marketing — the research, the creative, the outreach, the positioning, the community engagement — still eats the calendar of every founder who tries to do it alone. Until now, the choice was brutal: hire a team you cannot afford, buy tools that do not talk to each other, or ship into silence and hope Product Hunt saves you.
+
+**FounderForge ends that tradeoff.**
+
+Six services. Six API calls. Under $20 for the entire suite.
+
+| You need… | FounderForge gives you… |
+|-----------|-------------------------|
+| A launch video | Promo Video — cinematic ad from your URL |
+| A product walkthrough | Automated Product Demo — narrated screen recording |
+| Reddit distribution | Social Listening — threads + draft replies |
+| Investor outreach | Outreach — intelligence report from site + revenue sheet |
+| Competitive positioning | Competitor Research — feature matrix, pricing, SWOT, PDF |
+| A visual identity | Brand Kit — logos, colors, fonts, banners, ZIP |
+
+Every service is **agent-native** — standardized A2MCP endpoints on OKX.AI with fixed per-call pricing, instant x402 settlement on X Layer, and async artifact delivery. Human founders call them from a terminal. AI agents call them autonomously on behalf of their users. No signup forms. No subscriptions. No "contact sales."
+
+This is not incremental SaaS. This is **marketing infrastructure rebuilt for the agent economy** — where the unit of work is a structured API call, the unit of payment is a micro-transaction on-chain, and the unit of output is a file you can ship today.
+
+The one-person billion-dollar company does not need a hundred-person marketing department.
+
+It needs FounderForge.
+
+**The next big thing is not another tool. It is the entire stack — callable, payable, and deliverable in minutes.**
 
 ---
 
