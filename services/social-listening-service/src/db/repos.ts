@@ -4,8 +4,7 @@ import type {
   Platform,
   PostStatus,
   ScheduledPostRow,
-  ScoredCandidate,
-  SignalScores,
+  DraftCandidate,
 } from "../types.js";
 
 interface EventRow {
@@ -18,7 +17,7 @@ interface EventRow {
 interface CandidateRow {
   id: string;
   event_id: string;
-  candidate: ScoredCandidate;
+  candidate: DraftCandidate;
 }
 
 interface LedgerRow {
@@ -41,8 +40,6 @@ const candidates = new Map<string, CandidateRow>();
 const scheduled = new Map<string, ScheduledPostRow>();
 const ledger: LedgerRow[] = [];
 const fewShots: FewShotRow[] = [];
-let productEmbedding: { description: string; embedding: number[] } | null =
-  null;
 
 function eventKey(platform: Platform, externalId: string): string {
   return `${platform}:${externalId}`;
@@ -70,7 +67,6 @@ export function resetMemoryStore(): void {
   scheduled.clear();
   ledger.length = 0;
   fewShots.length = 0;
-  productEmbedding = null;
 }
 
 export async function upsertEvent(
@@ -97,7 +93,7 @@ export async function upsertEvent(
 
 export async function insertCandidate(
   eventId: string,
-  c: ScoredCandidate,
+  c: DraftCandidate,
 ): Promise<string> {
   const id = randomUUID();
   candidates.set(id, { id, event_id: eventId, candidate: c });
@@ -204,20 +200,6 @@ export async function recordLedger(row: {
   ledger.push({ ...row, posted_at: new Date() });
 }
 
-export async function upsertProductEmbedding(
-  description: string,
-  embedding: number[],
-): Promise<void> {
-  productEmbedding = { description, embedding };
-}
-
-export async function getProductEmbedding(): Promise<{
-  description: string;
-  embedding: number[];
-} | null> {
-  return productEmbedding;
-}
-
 export async function insertFewShot(row: {
   platform: Platform;
   community: string | null;
@@ -244,5 +226,3 @@ export async function topFewShotEmbeddings(limit = 20): Promise<number[][]> {
     .reverse()
     .map((f) => f.embedding);
 }
-
-export type { SignalScores };

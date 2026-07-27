@@ -58,7 +58,7 @@ export async function runPipeline(
   });
   costs.push({
     vendor: "llm",
-    operation: "score_draft",
+    operation: "draft",
     amount_usd: 0.05 * Math.max(1, result.posts.length),
   });
   if (input.live) {

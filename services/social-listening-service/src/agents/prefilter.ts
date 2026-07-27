@@ -1,65 +1,72 @@
-import type { NormalizedEvent, ProductConfig } from "../types.js";
-import { eventText } from "../ingest/normalize.js";
-
-const BOT_AUTHORS = new Set([
-  "automoderator",
-  "[deleted]",
-  "deleted",
-  "modnews",
-]);
-
+/** Seeker / ask language. */
 const NEED_PHRASES = [
   "looking for",
   "recommend",
+  "recommendation",
   "alternative to",
+  "alternatives to",
   "how do you",
+  "how do i",
+  "how can i",
   "any tools",
+  "any tool",
+  "any app",
   "what do you use",
+  "what should i use",
   "is there a",
-  "api key",
-  "integrations",
-  "tooling",
-  "workflow",
-  "automate",
-  "agents",
-  "mcp",
+  "does anyone",
+  "has anyone",
+  "need a way",
+  "need help",
+  "struggling with",
+  "pain point",
+  "too expensive",
+  "instead of",
+  "migrate from",
+  "migration",
+  "best way to",
+  "wish there was",
+  "suggestions",
+  "advice on choosing",
 ];
 
-/** Cheap gate — configured subreddits are in-scope; else keyword/ask phrases. */
-export function stage0Prefilter(
-  event: NormalizedEvent,
-  product: ProductConfig,
-): { pass: boolean; reason?: string } {
-  const text = eventText(event);
-  if (!text || text.length < 40) {
-    return { pass: false, reason: "too_short" };
-  }
-  if (/\[removed\]|\[deleted\]/i.test(text)) {
-    return { pass: false, reason: "deleted_or_removed" };
-  }
-  if (BOT_AUTHORS.has(event.author.toLowerCase())) {
-    return { pass: false, reason: "bot_author" };
-  }
+/**
+ * Founder / launch / showcase language — not seeker threads.
+ */
+const LAUNCH_PHRASES = [
+  "i'm building",
+  "i am building",
+  "im building",
+  "we're building",
+  "we are building",
+  "i built",
+  "i made",
+  "i launched",
+  "just launched",
+  "just shipped",
+  "show hn",
+  "show-hn",
+  "feedback on my",
+  "roast my",
+  "check out my",
+  "my startup",
+  "my side project",
+  "side project i",
+  "here's my",
+  "here is my",
+  "i created",
+  "open for feedback",
+  "would love feedback",
+  "beta access",
+  "product hunt",
+];
 
-  if (
-    event.community &&
-    product.subreddits.some(
-      (s) => s.toLowerCase() === event.community!.toLowerCase(),
-    )
-  ) {
-    return { pass: true };
-  }
-
-  const terms = [...product.keywords, ...product.subreddits, product.product_name]
-    .map((t) => t.toLowerCase())
-    .filter(Boolean);
-
+export function looksLikeLaunchOrShowcase(text: string): boolean {
   const hay = text.toLowerCase();
-  if (terms.some((t) => hay.includes(t))) return { pass: true };
+  return LAUNCH_PHRASES.some((p) => hay.includes(p));
+}
 
-  if (!NEED_PHRASES.some((p) => hay.includes(p))) {
-    return { pass: false, reason: "no_keyword_or_need_phrase" };
-  }
-
-  return { pass: true };
+export function looksLikeSeekerAsk(text: string): boolean {
+  const hay = text.toLowerCase();
+  return NEED_PHRASES.some((p) => hay.includes(p));
 }

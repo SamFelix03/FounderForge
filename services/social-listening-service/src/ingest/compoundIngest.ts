@@ -44,8 +44,20 @@ export async function ingestRedditViaCompound(
   }
 
   const hits = await discoverRedditThreadsViaCompound(product);
-  if (!hits.length) {
-    log.warn("compound discovery returned 0 threads");
+  let discovered = hits;
+
+  if (!discovered.length) {
+    log.warn(
+      "compound discovery returned 0 threads — falling back to Playwright subreddit search",
+    );
+    const { discoverRedditThreadsViaPlaywright } = await import(
+      "./playwrightDiscover.js"
+    );
+    discovered = await discoverRedditThreadsViaPlaywright(product);
+  }
+
+  if (!discovered.length) {
+    log.warn("discovery returned 0 threads (compound + playwright)");
     return [];
   }
 
@@ -55,7 +67,7 @@ export async function ingestRedditViaCompound(
   fs.writeFileSync(
     outFile,
     JSON.stringify(
-      hits.map((h) => ({
+      discovered.map((h) => ({
         url: h.url,
         title: h.title,
         selftext: h.selftext,
@@ -66,9 +78,9 @@ export async function ingestRedditViaCompound(
       2,
     ),
   );
-  log.info("saved discovered threads", { path: outFile, n: hits.length });
+  log.info("saved discovered threads", { path: outFile, n: discovered.length });
 
-  const ranked = [...hits].sort((a, b) => {
+  const ranked = [...discovered].sort((a, b) => {
     const score = (x: { title: string; selftext: string }) =>
       (ASKISH.test(`${x.title}\n${x.selftext}`) ? 2 : 0) +
       (matchesKeywords(`${x.title}\n${x.selftext}`, product.keywords) ? 1 : 0);
@@ -94,7 +106,7 @@ export async function ingestRedditViaCompound(
   });
 
   log.info("compound ingest done", {
-    discovered: hits.length,
+    discovered: discovered.length,
     fetchedUrls: urls.length,
     events: filtered.length,
   });

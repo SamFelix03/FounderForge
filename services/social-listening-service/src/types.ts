@@ -8,14 +8,6 @@ export interface ProductConfig {
   keywords: string[];
   /** Subreddit names without r/ */
   subreddits: string[];
-  scoring_weights: {
-    relevance: number;
-    need: number;
-    community_risk: number;
-    competitor: number;
-  };
-  risk_veto_threshold: number;
-  need_veto_threshold: number;
   max_posts_per_cycle: number;
   window_hours: number;
 }
@@ -33,23 +25,9 @@ export interface NormalizedEvent {
   parent_id?: string;
 }
 
-export interface SignalScores {
-  relevance: number;
-  need: number;
-  community_risk: number;
-  competitor: number;
-  rationales: {
-    relevance: string;
-    need: string;
-    community_risk: string;
-    competitor: string;
-  };
-}
-
-export interface ScoredCandidate {
+/** Draft ready to schedule / post (Tavily shortlist — no scores). */
+export interface DraftCandidate {
   event: NormalizedEvent;
-  scores: SignalScores;
-  aggregate: number;
   draft_text: string;
   draft_rationale: string;
   compliance_ok: boolean;

@@ -24,11 +24,6 @@ function normalizeUrl(input: string): string {
   return u.toString();
 }
 
-function clampNeedVeto(n: unknown): number {
-  const v = typeof n === "number" ? n : 0.4;
-  return Math.min(0.45, Math.max(0.32, v));
-}
-
 interface ChunkFacts {
   product_name?: string;
   one_liner?: string;
@@ -45,8 +40,6 @@ interface ChunkFacts {
  * 2) Chunk it
  * 3) gpt-oss-120b extracts facts per chunk
  * 4) gpt-oss-120b merges into ProductConfig
- *
- * (Compound visit_website dumps whole pages server-side → HTTP 413 on heavy sites.)
  */
 export async function discoverProductFromUrl(websiteUrl: string): Promise<{
   product: ProductConfig;
@@ -84,7 +77,7 @@ export async function discoverProductFromUrl(websiteUrl: string): Promise<{
     const { data } = await completeJson<ChunkFacts>({
       model: structModel,
       temperature: 0.1,
-      maxTokens: 700,
+      maxTokens: 2048,
       system: `Extract product facts from ONE website text chunk. Return JSON only.
 Only use facts present in the chunk. Omit unknown fields. No marketing fluff.`,
       prompt: `Website: ${url}
@@ -124,24 +117,19 @@ Return JSON:
     disclosure_line: string;
     keywords: string[];
     subreddits: string[];
-    scoring_weights?: ProductConfig["scoring_weights"];
-    risk_veto_threshold?: number;
-    need_veto_threshold?: number;
     max_posts_per_cycle?: number;
     window_hours?: number;
   }>({
     model: structModel,
     temperature: 0.15,
-    maxTokens: 1200,
+    maxTokens: 4096,
     system: `You merge chunked website extractions into JSON for a Reddit social-listening auto-poster.
 Return JSON only. Rules:
 - Prefer consistent facts that appear across chunks; ignore contradictions that look like nav chrome
 - keywords: pain/search phrases — 8–20 items
 - subreddits: 4–6 real Reddit communities (bare names, no r/) where people ask for tools like this
 - disclosure_line: must include the word "disclosure" and the product/site domain
-- need_veto_threshold: 0.38–0.42
-- scoring_weights: need ~0.4, relevance ~0.3
-- max_posts_per_cycle 12, window_hours 24`,
+- max_posts_per_cycle 5–8, window_hours 24`,
     prompt: `Website: ${url}
 
 Example subreddits (pick relevant ones or better fits):
@@ -158,14 +146,6 @@ Return JSON:
   "disclosure_line": string,
   "keywords": string[],
   "subreddits": string[],
-  "scoring_weights": {
-    "relevance": number,
-    "need": number,
-    "community_risk": number,
-    "competitor": number
-  },
-  "risk_veto_threshold": number,
-  "need_veto_threshold": number,
   "max_posts_per_cycle": number,
   "window_hours": number
 }`,
@@ -178,18 +158,7 @@ Return JSON:
     disclosure_line: data.disclosure_line,
     keywords: data.keywords,
     subreddits: sanitizeSubreddits(data.subreddits),
-    scoring_weights: data.scoring_weights ?? {
-      relevance: 0.3,
-      need: 0.4,
-      community_risk: 0.15,
-      competitor: 0.15,
-    },
-    risk_veto_threshold: Math.min(
-      0.4,
-      Math.max(0.2, data.risk_veto_threshold ?? 0.25),
-    ),
-    need_veto_threshold: clampNeedVeto(data.need_veto_threshold),
-    max_posts_per_cycle: data.max_posts_per_cycle ?? 12,
+    max_posts_per_cycle: data.max_posts_per_cycle ?? 5,
     window_hours: data.window_hours ?? 24,
   });
 
@@ -201,11 +170,6 @@ Return JSON:
   console.log(
     chalk.dim(
       `  keywords: ${product.keywords.slice(0, 8).join(", ")}${product.keywords.length > 8 ? "…" : ""}`,
-    ),
-  );
-  console.log(
-    chalk.dim(
-      `  thresholds: need_veto=${product.need_veto_threshold} risk_veto=${product.risk_veto_threshold}`,
     ),
   );
   console.log(chalk.dim(`  disclosure: ${product.disclosure_line}\n`));

@@ -1,13 +1,6 @@
-import { aggregateScores } from "../agents/aggregator.js";
 import { reviewCompliance } from "../agents/compliance.js";
 import { dedupAndRateLimit } from "../agents/dedup.js";
 import { writeDraft } from "../agents/draft.js";
-import {
-  ensureProductEmbedding,
-  stage1EmbedFilter,
-} from "../agents/embedFilter.js";
-import { stage0Prefilter } from "../agents/prefilter.js";
-import { scoreSignals } from "../agents/scorers.js";
 import {
   insertCandidate,
   insertScheduledPost,
@@ -17,14 +10,18 @@ import {
 } from "../db/repos.js";
 import { recordSuccessfulPost } from "../feedback/learn.js";
 import { canIngestViaCompound } from "../ingest/compoundIngest.js";
+import { canIngestViaTavily } from "../ingest/tavilyIngest.js";
 import { canIngestReddit, ingestReddit } from "../ingest/reddit.js";
-import { envInt, envOr } from "../config.js";
-import { groqPoolSize } from "../llm/groq.js";
+import { envOr } from "../config.js";
 import { createLogger } from "../log.js";
 import { executePost } from "../post/executor.js";
 import { discoverProductFromUrl } from "../product/discover.js";
 import { formatInterval } from "../schedule/spread24h.js";
-import type { NormalizedEvent, ProductConfig, ScoredCandidate } from "../types.js";
+import type {
+  DraftCandidate,
+  NormalizedEvent,
+  ProductConfig,
+} from "../types.js";
 
 const log = createLogger("pipeline.plan");
 
@@ -45,19 +42,9 @@ export interface PlanResult {
   live: boolean;
 }
 
-interface ReadyRow {
-  candidateId: string;
-  candidate: ScoredCandidate;
-}
-
-interface EmbedPass {
-  event: NormalizedEvent;
-  embedScore: number;
-}
-
 /**
- * Single-job plan cycle: discover → ingest → score/draft → immediate post.
- * Uses in-memory store (no Postgres migrations).
+ * Plan cycle: discover product → Tavily threads → draft → post.
+ * No embedding / signal scoring — Tavily results are trusted.
  */
 export async function runPlanCycle(opts: {
   live: boolean;
@@ -91,17 +78,20 @@ export async function runPlanCycle(opts: {
 
   if (!canIngestReddit()) {
     throw new Error(
-      "Need GROQ_API_KEY (+ Reddit session for Compound/Playwright) or RAPIDAPI_KEY",
+      "Need TAVILY_API_KEY (preferred), or GROQ + Reddit session / RAPIDAPI_KEY",
     );
   }
 
   const ingestLabel = (() => {
-    const pref = envOr("REDDIT_INGEST", "auto").toLowerCase();
+    const pref = envOr("REDDIT_INGEST", "tavily").toLowerCase();
+    if (pref === "tavily" || (pref === "auto" && canIngestViaTavily())) {
+      return "Tavily → draft";
+    }
     if (pref === "reddapi") return "ReddAPI";
     if (pref === "compound" || pref === "playwright" || canIngestViaCompound()) {
       return "Compound → Playwright";
     }
-    return "ReddAPI";
+    return canIngestViaTavily() ? "Tavily → draft" : "ReddAPI";
   })();
   log.info("reddit ingest", { provider: ingestLabel, subs: product.subreddits });
 
@@ -112,63 +102,17 @@ export async function runPlanCycle(opts: {
     });
     return [] as NormalizedEvent[];
   });
-  log.info("ingested events", { total: events.length });
+  const threads = events
+    .filter((e) => e.external_id.startsWith("post_") || !e.parent_id)
+    .slice(0, maxN);
+  log.info("ingested threads", { total: events.length, using: threads.length });
 
-  await phase("score_draft");
-  const productEmb = await ensureProductEmbedding(product);
-  const funnel = {
-    ingested: events.length,
-    stage0: 0,
-    stage1: 0,
-    dedup: 0,
-    scorer: 0,
-    aggregator: 0,
-    draft: 0,
-    compliance: 0,
-  };
+  await phase("draft");
+  const ready: Array<{ candidateId: string; candidate: DraftCandidate }> = [];
+  const funnel = { ingested: threads.length, dedup: 0, draft: 0, compliance: 0 };
 
-  const embedPasses: EmbedPass[] = [];
-  for (const event of events) {
-    const s0 = stage0Prefilter(event, product);
-    if (!s0.pass) {
-      await upsertEvent(event, { stage: "stage0", reason: s0.reason || "fail" });
-      continue;
-    }
-    funnel.stage0 += 1;
-
-    const s1 = await stage1EmbedFilter(event, productEmb);
-    if (!s1.pass) {
-      await upsertEvent(event, {
-        stage: "stage1",
-        reason: s1.reason || "fail",
-      });
-      continue;
-    }
-    funnel.stage1 += 1;
-    embedPasses.push({ event, embedScore: s1.score });
-  }
-
-  embedPasses.sort((a, b) => {
-    const boost = (e: NormalizedEvent) =>
-      (e.external_id.startsWith("comment_") ? 0.08 : 0) +
-      (/looking for|recommend|how do|any tool|alternative|api key|integrat/i.test(
-        `${e.title}\n${e.body}`,
-      )
-        ? 0.1
-        : 0);
-    return b.embedScore + boost(b.event) - (a.embedScore + boost(a.event));
-  });
-
-  const llmBudget = Math.min(envInt("LLM_CANDIDATE_BUDGET", 8), maxN * 2);
-  const forLlm = embedPasses.slice(0, llmBudget);
-
-  const ready: ReadyRow[] = [];
-  const concurrency = Math.max(1, groqPoolSize());
-  log.info("llm stage", { candidates: forLlm.length, concurrency });
-
-  let cursor = 0;
-  async function processOne(event: NormalizedEvent): Promise<void> {
-    if (ready.length >= maxN * 2) return;
+  for (const event of threads) {
+    if (ready.length >= maxN) break;
 
     const dedup = await dedupAndRateLimit(event);
     if (!dedup.pass) {
@@ -176,47 +120,21 @@ export async function runPlanCycle(opts: {
         stage: "dedup",
         reason: dedup.reason || "fail",
       });
-      return;
+      continue;
     }
     funnel.dedup += 1;
 
     const eventId = await upsertEvent(event);
 
-    let scores;
-    try {
-      scores = await scoreSignals(event, product);
-    } catch (err) {
-      log.warn("scorer failed", {
-        id: event.external_id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      await upsertEvent(event, {
-        stage: "scorer",
-        reason: err instanceof Error ? err.message : "scorer_error",
-      });
-      return;
-    }
-    funnel.scorer += 1;
-
-    const agg = aggregateScores(scores, product);
-    if (!agg.pass) {
-      await upsertEvent(event, {
-        stage: "aggregator",
-        reason: agg.reason || "fail",
-      });
-      return;
-    }
-    funnel.aggregator += 1;
-
     let draft;
     try {
-      draft = await writeDraft(event, product, scores);
+      draft = await writeDraft(event, product);
     } catch (err) {
       log.warn("draft failed", {
         id: event.external_id,
         error: err instanceof Error ? err.message : String(err),
       });
-      return;
+      continue;
     }
     funnel.draft += 1;
 
@@ -226,14 +144,16 @@ export async function runPlanCycle(opts: {
         stage: "compliance",
         reason: compliance.notes || "fail",
       });
-      return;
+      log.warn("compliance failed", {
+        id: event.external_id,
+        reason: compliance.notes,
+      });
+      continue;
     }
     funnel.compliance += 1;
 
-    const candidate: ScoredCandidate = {
+    const candidate: DraftCandidate = {
       event,
-      scores,
-      aggregate: agg.aggregate,
       draft_text: draft.draft_text,
       draft_rationale: draft.draft_rationale,
       compliance_ok: true,
@@ -244,28 +164,15 @@ export async function runPlanCycle(opts: {
     ready.push({ candidateId, candidate });
   }
 
-  async function worker(): Promise<void> {
-    while (ready.length < maxN * 2) {
-      const i = cursor++;
-      if (i >= forLlm.length) return;
-      await processOne(forLlm[i]!.event);
-    }
-  }
-
-  await Promise.all(Array.from({ length: concurrency }, () => worker()));
-
-  ready.sort((a, b) => b.candidate.aggregate - a.candidate.aggregate);
-  const selected = ready.slice(0, maxN);
-  const N = selected.length;
+  const N = ready.length;
   const intervalLabel = formatInterval(product.window_hours, N);
-
   log.info("funnel", funnel);
 
   const posts: PlanPostResult[] = [];
 
   await phase("post");
-  for (let index = 0; index < selected.length; index++) {
-    const { candidateId, candidate: c } = selected[index]!;
+  for (let index = 0; index < ready.length; index++) {
+    const { candidateId, candidate: c } = ready[index]!;
     const scheduledId = await insertScheduledPost({
       candidateId,
       platform: c.event.platform,

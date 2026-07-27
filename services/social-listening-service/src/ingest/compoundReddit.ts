@@ -129,18 +129,42 @@ async function compoundSearchOnce(opts: {
     },
   };
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${groqKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const rawText = await res.text();
-  if (!res.ok) {
-    throw new Error(`Groq compound ${res.status}: ${rawText.slice(0, 400)}`);
+  const maxAttempts = 4;
+  let rawText = "";
+  let res: Response | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${groqKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    rawText = await res.text();
+    if (res.ok) break;
+
+    const retryable = res.status === 429 || res.status === 503;
+    if (!retryable || attempt === maxAttempts) {
+      throw new Error(`Groq compound ${res.status}: ${rawText.slice(0, 400)}`);
+    }
+    // Prefer header, then "try again in Xs" from body, else exponential backoff
+    const ra = Number(res.headers.get("retry-after") || "");
+    const bodyWait = rawText.match(/try again in\s+([\d.]+)\s*s/i);
+    const bodyMs = bodyWait ? Math.ceil(Number(bodyWait[1]) * 1000) + 500 : 0;
+    const waitMs =
+      Number.isFinite(ra) && ra > 0
+        ? ra * 1000
+        : bodyMs > 0
+          ? bodyMs
+          : 8_000 * attempt;
+    log.warn("compound rate-limited — backing off", {
+      status: res.status,
+      attempt,
+      waitMs,
+    });
+    await new Promise((r) => setTimeout(r, waitMs));
   }
 
   const json = JSON.parse(rawText) as GroqCompoundRaw;
@@ -244,7 +268,8 @@ export async function discoverRedditThreadsViaCompound(
       Math.ceil(totalLimit / targets.length),
     ),
   );
-  const gapMs = envInt("COMPOUND_SUB_GAP_MS", 2500);
+  // Space Compound calls — free tier TPM is easy to blow through
+  const gapMs = envInt("COMPOUND_SUB_GAP_MS", 10_000);
 
   log.info("compound reddit discovery start", {
     product: product.product_name,
@@ -259,15 +284,19 @@ export async function discoverRedditThreadsViaCompound(
 
   for (let i = 0; i < targets.length; i++) {
     const sub = targets[i]!;
-    const prompt = `Search the web for ${perSub} popular Reddit posts in r/${sub} about: ${kws}.
+    const prompt = `Search the web for ${perSub} Reddit posts in r/${sub} where people are SEEKING a tool or help (not launching their own product).
 
-Use web_search with query:
-site:reddit.com/r/${sub} (looking for OR recommend OR alternative OR "how do I" OR "does anyone") ${product.product_name}
+Topic context: ${kws}
+
+Use web_search with query like:
+site:reddit.com/r/${sub} ("looking for" OR recommend OR alternative OR "how do I" OR "does anyone" OR "what do you use") (${kws.split(", ").slice(0, 3).join(" OR ")})
+
+EXCLUDE: "I'm building", "I built", "just launched", "feedback on my", Show HN, product pitches.
 
 Return ONLY JSON:
-{"threads":[{"url":"https://www.reddit.com/r/${sub}/comments/.../...","title":"...","selftext":"short why","subreddit":"${sub}"}]}
+{"threads":[{"url":"https://www.reddit.com/r/${sub}/comments/.../...","title":"...","selftext":"why this is a seeker ask","subreddit":"${sub}"}]}
 
-Only include real /comments/ URLs from r/${sub}. Max ${perSub} items.`;
+Only real /comments/ URLs from r/${sub}. Max ${perSub} items.`;
 
     try {
       const { text, toolUrls } = await compoundSearchOnce({ prompt, model });
@@ -317,8 +346,9 @@ Only include real /comments/ URLs from r/${sub}. Max ${perSub} items.`;
 
   // Global fallback if every sub failed
   if (!out.length) {
-    const prompt = `Find ${Math.min(5, totalLimit)} real Reddit threads (site:reddit.com) about: ${kws}.
-Prefer "looking for" / recommend / alternative posts across different subreddits.
+    const prompt = `Find ${Math.min(5, totalLimit)} real Reddit threads (site:reddit.com) where people are SEEKING tools/help about: ${kws}.
+Prefer "looking for" / recommend / alternative / "how do I" / "does anyone" posts.
+EXCLUDE founder launches ("I'm building", "I launched", feedback-on-my-product).
 Return ONLY JSON {"threads":[{"url":"https://www.reddit.com/r/.../comments/.../","title":"...","selftext":"...","subreddit":"..."}]}`;
     try {
       const { text, toolUrls } = await compoundSearchOnce({ prompt, model });

@@ -296,6 +296,9 @@ async function completeOnce(req: LlmRequest): Promise<LlmResponse> {
         name === "AbortError" ||
         /aborted|timeout/i.test(message);
       const tooLarge = /413|request_too_large|entity too large/i.test(message);
+      const jsonFail = /json_validate_failed|Failed to (validate|generate) JSON/i.test(
+        message,
+      );
       log.warn("groq request failed", {
         model,
         key: slot.id,
@@ -307,6 +310,9 @@ async function completeOnce(req: LlmRequest): Promise<LlmResponse> {
       });
       // 413 won't succeed by retrying the same Compound crawl.
       if (tooLarge) break;
+      // Empty/truncated JSON from gpt-oss usually needs higher max_tokens, not 12 retries
+      if (jsonFail && /failed_generation":\s*""/i.test(message)) break;
+      if (jsonFail && attempt >= 3) break;
       if (attempt >= maxAttempts) break;
       await sleep(timedOut ? 1500 : 800 * attempt);
     }

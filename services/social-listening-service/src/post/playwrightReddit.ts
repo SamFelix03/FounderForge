@@ -141,32 +141,101 @@ async function postViaOldReddit(
     return { ok: false, error: "blocked on old.reddit" };
   }
 
-  const ta = page.locator('textarea[name="text"]').first();
-  if ((await ta.count()) === 0) {
+  // Prefer top-level comment box (not a nested reply)
+  const ta = page.locator('form.usertext.cloneable textarea[name="text"], .commentarea textarea[name="text"]').first();
+  const taFallback = page.locator('textarea[name="text"]').first();
+  const box = (await ta.count()) > 0 ? ta : taFallback;
+  if ((await box.count()) === 0) {
     return { ok: false, error: "old.reddit textarea not found" };
   }
-  await ta.click();
-  await ta.fill(text);
+
+  // Post exact draft — no ff- marker (looks spammy / gets filtered)
+  const bodyText = text.trim();
+  const needle = bodyText.slice(0, Math.min(56, bodyText.length)).trim();
+
+  await box.click();
+  await box.fill(bodyText);
+
+  const beforeUrl = page.url();
   const submit = page
-    .locator('button[type="submit"], button.save, .usertext-buttons .save')
+    .locator(
+      'form.usertext.cloneable button[type="submit"], .commentarea .usertext-buttons .save, button.save',
+    )
     .first();
   if ((await submit.count()) > 0) {
     await submit.click();
   } else {
     await page.keyboard.press("Control+Enter");
   }
-  await page.waitForTimeout(3500);
 
-  const after = page.url();
-  const visible = await page.locator("body").innerText().catch(() => "");
-  const snippet = text.slice(0, Math.min(40, text.length));
-  if (visible.includes(snippet) || /\/comments\/.+\/\w+/.test(after)) {
+  // Wait for either redirect to comment permalink or draft text visible in a comment
+  const deadline = Date.now() + 20_000;
+  let confirmed = false;
+  let permalink = beforeUrl;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(800);
+    const after = page.url();
+    // Deep comment links look like .../comments/<post>/<slug>/<commentId>/
+    const deep = after.match(
+      /\/comments\/[a-z0-9]+\/[^/]+\/([a-z0-9]+)\//i,
+    );
+    if (deep && after !== beforeUrl) {
+      permalink = after.startsWith("http")
+        ? after.replace("old.reddit.com", "www.reddit.com")
+        : after;
+      confirmed = true;
+      break;
+    }
+
+    if (needle.length >= 16) {
+      const hit = await page
+        .locator(".comment .usertext-body, .entry .usertext-body")
+        .filter({ hasText: needle.slice(0, 40) })
+        .count()
+        .catch(() => 0);
+      if (hit > 0) {
+        const href = await page
+          .locator(".comment")
+          .filter({ hasText: needle.slice(0, 40) })
+          .locator('a.bylink, a[data-event-action="permalink"]')
+          .first()
+          .getAttribute("href")
+          .catch(() => null);
+        if (href) {
+          permalink = href.startsWith("http")
+            ? href.replace("old.reddit.com", "www.reddit.com")
+            : `https://www.reddit.com${href}`;
+        } else {
+          permalink = after.replace("old.reddit.com", "www.reddit.com");
+        }
+        confirmed = true;
+        break;
+      }
+    }
+
+    const err = await page
+      .locator(".error, .status-msg, .c-alert")
+      .first()
+      .innerText()
+      .catch(() => "");
+    if (err && /error|forbidden|ratelimit|removed|login/i.test(err)) {
+      return { ok: false, error: `old.reddit error: ${err.slice(0, 160)}` };
+    }
+  }
+
+  if (!confirmed) {
+    // Dump a short signal for debugging
+    const body = await page.locator("body").innerText().catch(() => "");
+    if (/you must be logged|log in|sign in/i.test(body)) {
+      return { ok: false, error: "old.reddit appears logged out" };
+    }
     return {
-      ok: true,
-      permalink: after.includes("reddit.com") ? after : url,
+      ok: false,
+      error: "old.reddit comment not confirmed (no permalink / text)",
     };
   }
-  return { ok: false, error: "old.reddit comment not confirmed" };
+
+  return { ok: true, permalink };
 }
 
 async function postViaComposerUi(
@@ -287,12 +356,16 @@ async function postViaComposerUi(
   }
   await page.waitForTimeout(4000);
 
-  const visible = await page.locator("body").innerText().catch(() => "");
-  const snippet = text.slice(0, Math.min(40, text.length));
-  if (visible.includes(snippet)) {
-    return { ok: true, permalink: page.url() };
+  // Require a unique slice of the draft that is unlikely to already be on the page
+  const needle = text.slice(0, Math.min(48, text.length)).trim();
+  if (needle.length < 16) {
+    return { ok: false, error: "www comment text too short to confirm" };
   }
-  return { ok: false, error: "www comment not confirmed on page" };
+  const visible = await page.locator("body").innerText().catch(() => "");
+  if (!visible.includes(needle)) {
+    return { ok: false, error: "www comment not confirmed on page" };
+  }
+  return { ok: true, permalink: page.url() };
 }
 
 async function openContext(proxy: ParsedProxy | null): Promise<BrowserContext> {
@@ -371,11 +444,14 @@ async function attemptPost(
 
 /**
  * Comment on a Reddit post/comment using the logged-in Playwright profile.
+ *
+ * @param opts.directOnly — skip Webshare proxies (use home IP). Useful for spam-score diagnosis.
  */
 export async function postCommentViaPlaywright(opts: {
   permalinkTarget: string;
   targetRef: string;
   draftText: string;
+  directOnly?: boolean;
 }): Promise<{ permalink: string }> {
   if (!canPostViaPlaywright()) {
     throw new Error(
@@ -384,11 +460,12 @@ export async function postCommentViaPlaywright(opts: {
   }
 
   return withPostLock(async () => {
-    const proxies = loadRedditProxies();
-    const attempts: Array<ParsedProxy | null> = [
-      ...proxies.slice(0, 3),
-      ...(proxies.length ? [] : [null]),
-    ];
+    const attempts: Array<ParsedProxy | null> = opts.directOnly
+      ? [null]
+      : [
+          ...loadRedditProxies().slice(0, 3),
+          ...(loadRedditProxies().length ? [] : [null]),
+        ];
     if (!attempts.length) attempts.push(null);
 
     const errors: string[] = [];

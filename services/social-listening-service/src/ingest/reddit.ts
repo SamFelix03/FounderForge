@@ -7,6 +7,10 @@ import {
   ingestRedditViaCompound,
 } from "./compoundIngest.js";
 import {
+  canIngestViaTavily,
+  ingestRedditViaTavily,
+} from "./tavilyIngest.js";
+import {
   canUseReddApi,
   risingPosts,
   scrapePostComments,
@@ -292,20 +296,23 @@ async function fetchSubPosts(
 }
 
 export function canIngestReddit(): boolean {
-  return canIngestViaCompound() || canUseReddApi();
+  return canIngestViaTavily() || canIngestViaCompound() || canUseReddApi();
 }
 
-/** compound | reddapi | auto (Compound+Playwright if ready, else ReddAPI) */
-function ingestProvider(): "compound" | "reddapi" {
-  const pref = envOr("REDDIT_INGEST", "auto").toLowerCase();
+/** tavily (default) | compound | reddapi | auto */
+function ingestProvider(): "tavily" | "compound" | "reddapi" {
+  const pref = envOr("REDDIT_INGEST", "tavily").toLowerCase();
+  if (pref === "tavily") return "tavily";
   if (pref === "compound" || pref === "playwright") return "compound";
   if (pref === "reddapi") return "reddapi";
-  // legacy alias
   if (pref === "apify") {
-    log.warn("REDDIT_INGEST=apify is removed — using compound");
-    return "compound";
+    log.warn("REDDIT_INGEST=apify is removed — using tavily");
+    return "tavily";
   }
-  return canIngestViaCompound() ? "compound" : "reddapi";
+  // auto
+  if (canIngestViaTavily()) return "tavily";
+  if (canIngestViaCompound()) return "compound";
+  return "reddapi";
 }
 
 async function ingestRedditViaReddApi(
@@ -373,11 +380,21 @@ export async function ingestReddit(
   const provider = ingestProvider();
   log.info("reddit ingest provider", { provider });
 
+  if (provider === "tavily") {
+    if (!canIngestViaTavily()) {
+      log.warn("tavily ingest not ready — falling back");
+      if (canIngestViaCompound()) return ingestRedditViaCompound(product);
+      return ingestRedditViaReddApi(product);
+    }
+    return ingestRedditViaTavily(product);
+  }
+
   if (provider === "compound") {
     if (!canIngestViaCompound()) {
       log.warn(
-        "compound ingest not ready (need Groq keys + reddit:session) — falling back to ReddAPI if available",
+        "compound ingest not ready (need Groq keys + reddit:session) — falling back",
       );
+      if (canIngestViaTavily()) return ingestRedditViaTavily(product);
       return ingestRedditViaReddApi(product);
     }
     return ingestRedditViaCompound(product);

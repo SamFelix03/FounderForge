@@ -1,0 +1,23 @@
+[
+  {
+    "url": "https://www.reddit.com/r/AI_Agents/comments/1sodvwo/im_tired_of_giving_my_ai_agents_api_keys_to_do/",
+    "title": "I'm tired of giving my AI agents api keys to do one off tasks, so I found an alternative",
+    "selftext": "I'm frustrated having to manage dozens of API keys and subscriptions for each tool my AI agent uses (Twitter, Reddit, TikTok, etc.). I'm looking for a way to give my agent a wallet so it can pay per API call without separate accounts.",
+    "subreddit": "AI_Agents",
+    "why": "The post directly complains about managing multiple API keys and seeks a unified payment solution for AI agents."
+  },
+  {
+    "url": "https://www.reddit.com/r/AI_Agents/comments/1u9xylq/how_should_autonomous_ai_agents_pay_for_tools_and/",
+    "title": "How should autonomous AI agents pay for tools and APIs?",
+    "selftext": "The API has to be able to accept a per‑call payment without an account existing at all. Almost every API still wants a signup, a key, and a...",
+    "subreddit": "AI_Agents",
+    "why": "The OP asks for a way for agents to pay per call without separate API keys, matching the request for a unified account."
+  },
+  {
+    "url": "https://www.reddit.com/r/defi/comments/1tuwpkp/single_use_virtual_cards_might_be_the_answer_to/",
+    "title": "Single use virtual cards might be the answer to the AI agent payment problem",
+    "selftext": "Discusses using crypto‑native virtual cards to let agents make purchases without holding a standing wallet, aiming to simplify payment across multiple services.",
+    "subreddit": "defi",
+    "why": "While focused on virtual cards, the post addresses the broader problem of unified payment for AI agents across many APIs."
+  }
+]
