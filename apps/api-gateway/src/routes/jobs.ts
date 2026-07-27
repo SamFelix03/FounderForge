@@ -1,14 +1,16 @@
 import { Router, type Router as ExpressRouter } from "express";
 import {
   AutomatedProductDemoInputSchema,
+  BrandKitInputSchema,
+  buildDiscoveryDocument,
   CompetitorResearchInputSchema,
   CreateJobRequestSchema,
-  PromoVideoInputSchema,
-  SocialListeningInputSchema,
+  defaultPublicBaseUrl,
   OutreachInputSchema,
-  BrandKitInputSchema,
+  PromoVideoInputSchema,
   SERVICE_MANIFESTS,
   ServiceNameSchema,
+  SocialListeningInputSchema,
   type ServiceName,
 } from "@founderforge/schemas";
 import { createLogger } from "@founderforge/observability";
@@ -16,6 +18,12 @@ import { jobStore } from "../jobs/store.js";
 import { dispatchJob } from "../jobs/dispatch.js";
 
 const log = createLogger("routes.jobs");
+
+function discoveryPayload() {
+  return buildDiscoveryDocument({
+    baseUrl: defaultPublicBaseUrl(),
+  });
+}
 
 function validateServiceInput(service: ServiceName, input: Record<string, unknown>) {
   switch (service) {
@@ -112,13 +120,15 @@ jobsRouter.get("/v1/jobs/:jobId", async (req, res) => {
   });
 });
 
+/**
+ * Free A2MCP discovery catalog — protocol, JSON Schemas, examples, artifact rules.
+ * Not registered in OKX payment routes (GET-only / unpaid).
+ */
+jobsRouter.get("/v1/discovery", (_req, res) => {
+  res.json(discoveryPayload());
+});
+
+/** Alias of /v1/discovery for callers that already probe the services catalog. */
 jobsRouter.get("/v1/services", (_req, res) => {
-  res.json({
-    services: Object.values(SERVICE_MANIFESTS).map((m) => ({
-      name: m.name,
-      a2mcp_price_usd: m.a2mcp_price_usd,
-      endpoint_path: m.endpoint_path,
-      sla_minutes: m.sla_minutes,
-    })),
-  });
+  res.json(discoveryPayload());
 });

@@ -20,3 +20,5 @@
 Local dev uses `PAYMENTS_BYPASS=true` so create-job returns 202 without chain payment.
 
 **Full paid request → artifact walkthrough (buyer + poll):** [Paid ASP request runbook](../runbooks/paid-asp-request.md).
+
+**Agent discovery (free):** `GET https://YOUR_DOMAIN/v1/discovery` returns protocol steps, per-service JSON Schemas, example bodies, and how to read `artifacts[].url`. Same payload on `GET /v1/services`. List it on the ASP as a **0 USDT** API service pointing at `/v1/discovery`.

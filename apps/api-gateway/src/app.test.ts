@@ -75,10 +75,31 @@ describe("api-gateway", { skip: !hasDb }, () => {
   it("lists service catalog with A2MCP prices", async () => {
     const res = await request(app).get("/v1/services");
     assert.equal(res.status, 200);
+    assert.equal(res.body.protocol?.pattern, "A");
     const cr = res.body.services.find(
       (s: { name: string }) => s.name === "competitor-research",
     );
     assert.equal(cr.a2mcp_price_usd, 1.0);
+    assert.ok(cr.input_schema);
+    assert.ok(cr.example_request?.input?.product_name);
+  });
+
+  it("serves free discovery document with protocol and schemas", async () => {
+    const res = await request(app).get("/v1/discovery");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.schema_version, "1.0.0");
+    assert.equal(res.body.protocol.name, "paid_create_free_poll");
+    assert.equal(res.body.protocol.polling.result_url_field, "artifacts[].url");
+    assert.equal(res.body.services.length, 6);
+    assert.ok(
+      res.body.free_endpoints.some(
+        (e: { path: string }) => e.path === "/v1/discovery",
+      ),
+    );
+    const brand = res.body.services.find(
+      (s: { name: string }) => s.name === "brand-kit",
+    );
+    assert.equal(brand.example_artifacts[0].type, "brand_kit_zip");
   });
 
   it("rejects unknown service", async () => {

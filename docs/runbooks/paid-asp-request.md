@@ -300,7 +300,7 @@ All paid creates are:
 | `automated-product-demo` | $1.49 | `{ "website_url": "https://…", "script": "…" }` | demo video URL |
 | `outreach` | $1.00 | `{ "website_url": "https://…", "sheet_url": "https://….xlsx" }` | investor PDF |
 
-Catalog (unpaid): `GET /v1/services`.
+Catalog / discovery (unpaid): `GET /v1/discovery` (alias: `GET /v1/services`) — full Pattern A protocol, JSON Schemas, examples, and artifact rules.
 
 ---
 
