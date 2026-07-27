@@ -1,8 +1,7 @@
 /**
- * Upload brand-kit zips to Supabase Storage and return a public/signed URL.
- * Env: BRANDKIT_SUPABASE_* (same pattern as brandkitForge), with DEMO_SUPABASE_* fallback.
- * BRANDKIT_SUPABASE_SIGNED_URL_EXPIRES_IN=0 → public URL
- * >0 → signed URL with that TTL in seconds
+ * Upload brand-kit zips to Supabase Storage (shared Feature 5 project).
+ * Credentials: SUPABASE_* (canonical). Optional BRANDKIT_SUPABASE_* / DEMO_SUPABASE_* overrides.
+ * Signed TTL defaults to REPORT_URL_TTL_SECONDS (7d). Set …_EXPIRES_IN=0 for public URLs.
  */
 
 import { randomUUID } from "node:crypto";
@@ -25,25 +24,32 @@ function env(...names: string[]): string {
 
 export function supabaseConfigured(): boolean {
   return Boolean(
-    env("BRANDKIT_SUPABASE_URL", "DEMO_SUPABASE_URL") &&
-      env("BRANDKIT_SUPABASE_SERVICE_ROLE_KEY", "DEMO_SUPABASE_SERVICE_ROLE_KEY"),
+    env("SUPABASE_URL", "BRANDKIT_SUPABASE_URL", "DEMO_SUPABASE_URL") &&
+      env(
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "BRANDKIT_SUPABASE_SERVICE_ROLE_KEY",
+        "DEMO_SUPABASE_SERVICE_ROLE_KEY",
+      ),
   );
 }
 
 export function getSupabaseConfig(): SupabaseConfig {
-  const supabaseUrl = env("BRANDKIT_SUPABASE_URL", "DEMO_SUPABASE_URL");
+  const supabaseUrl = env("SUPABASE_URL", "BRANDKIT_SUPABASE_URL", "DEMO_SUPABASE_URL");
   const supabaseServiceRoleKey = env(
+    "SUPABASE_SERVICE_ROLE_KEY",
     "BRANDKIT_SUPABASE_SERVICE_ROLE_KEY",
     "DEMO_SUPABASE_SERVICE_ROLE_KEY",
   );
   if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error(
-      "Missing BRANDKIT_SUPABASE_URL + BRANDKIT_SUPABASE_SERVICE_ROLE_KEY (or DEMO_SUPABASE_*) in .env",
-    );
+    throw new Error("Missing SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env");
   }
 
   const signedExpires = Number.parseInt(
-    env("BRANDKIT_SUPABASE_SIGNED_URL_EXPIRES_IN", "DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN") || "0",
+    env(
+      "BRANDKIT_SUPABASE_SIGNED_URL_EXPIRES_IN",
+      "DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN",
+      "REPORT_URL_TTL_SECONDS",
+    ) || String(60 * 60 * 24 * 7),
     10,
   );
 
@@ -51,9 +57,15 @@ export function getSupabaseConfig(): SupabaseConfig {
     supabaseUrl,
     supabaseServiceRoleKey,
     supabaseBucket:
-      env("BRANDKIT_SUPABASE_STORAGE_BUCKET", "DEMO_SUPABASE_STORAGE_BUCKET") || "demoforge",
+      env(
+        "BRANDKIT_SUPABASE_STORAGE_BUCKET",
+        "SUPABASE_STORAGE_BUCKET",
+        "DEMO_SUPABASE_STORAGE_BUCKET",
+      ) || "reports",
     supabaseObjectPrefix: (env("BRANDKIT_SUPABASE_OBJECT_PREFIX") || "brandkit").trim(),
-    supabaseSignedUrlExpiresIn: Number.isFinite(signedExpires) ? signedExpires : 0,
+    supabaseSignedUrlExpiresIn: Number.isFinite(signedExpires)
+      ? signedExpires
+      : 60 * 60 * 24 * 7,
   };
 }
 

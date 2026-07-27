@@ -77,7 +77,7 @@ export async function compileOutreachReport(
 
   if (!supabaseConfigured()) {
     throw new Error(
-      "Outreach PDF upload requires OUTREACH_SUPABASE_URL + OUTREACH_SUPABASE_SERVICE_ROLE_KEY (or DEMO_SUPABASE_*). Local output is disabled.",
+      "Outreach PDF upload requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY. Local output is disabled.",
     );
   }
 

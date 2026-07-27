@@ -73,38 +73,51 @@ async function createSignedUrl(
 }
 
 /**
- * Demo uploads use a separate Supabase project from competitor-research
- * (`SUPABASE_*`). Prefer `DEMO_SUPABASE_*` only — never fall back to report storage.
+ * Shared FounderForge Supabase project (`SUPABASE_*`, same as Feature 5).
+ * Optional `DEMO_SUPABASE_*` overrides remain for local experiments only.
  */
+function envFirst(...names: string[]): string {
+  for (const name of names) {
+    const v = process.env[name]?.trim();
+    if (v) return v;
+  }
+  return "";
+}
+
 export function supabaseConfigured(): boolean {
   return Boolean(
-    process.env.DEMO_SUPABASE_URL?.trim() &&
-      process.env.DEMO_SUPABASE_SERVICE_ROLE_KEY?.trim(),
+    envFirst("SUPABASE_URL", "DEMO_SUPABASE_URL") &&
+      envFirst("SUPABASE_SERVICE_ROLE_KEY", "DEMO_SUPABASE_SERVICE_ROLE_KEY"),
   );
 }
 
 export function loadDemoStorageConfigFromEnv(): DemoStorageConfig {
-  const supabaseUrl = process.env.DEMO_SUPABASE_URL?.trim();
-  const supabaseServiceRoleKey = process.env.DEMO_SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const supabaseUrl = envFirst("SUPABASE_URL", "DEMO_SUPABASE_URL");
+  const supabaseServiceRoleKey = envFirst(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "DEMO_SUPABASE_SERVICE_ROLE_KEY",
+  );
   if (!supabaseUrl || !supabaseServiceRoleKey) {
     throw new Error(
-      "DEMO_SUPABASE_URL and DEMO_SUPABASE_SERVICE_ROLE_KEY are required (separate from competitor-research SUPABASE_*)",
+      "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (shared FounderForge Storage)",
     );
   }
   const ttlRaw =
-    process.env.DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN?.trim() ||
-    process.env.DEMO_URL_TTL_SECONDS?.trim() ||
-    "0";
+    envFirst(
+      "DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN",
+      "DEMO_URL_TTL_SECONDS",
+      "REPORT_URL_TTL_SECONDS",
+    ) || String(60 * 60 * 24 * 7);
   const ttl = Number.parseInt(ttlRaw, 10);
   return {
     supabaseUrl,
     supabaseServiceRoleKey,
-    supabaseBucket: process.env.DEMO_SUPABASE_STORAGE_BUCKET?.trim() || "demoforge",
+    supabaseBucket:
+      envFirst("SUPABASE_STORAGE_BUCKET", "DEMO_SUPABASE_STORAGE_BUCKET") || "reports",
     supabaseObjectPrefix:
-      process.env.DEMO_SUPABASE_OBJECT_PREFIX?.trim() ||
-      process.env.DEMO_OBJECT_PREFIX?.trim() ||
-      "demos",
-    supabaseSignedUrlExpiresIn: Number.isFinite(ttl) && ttl > 0 ? ttl : 0,
+      envFirst("DEMO_SUPABASE_OBJECT_PREFIX", "DEMO_OBJECT_PREFIX") || "demos",
+    // Default signed (private reports bucket). Set DEMO_*_EXPIRES_IN=0 for public.
+    supabaseSignedUrlExpiresIn: Number.isFinite(ttl) ? ttl : 60 * 60 * 24 * 7,
   };
 }
 

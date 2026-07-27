@@ -20,7 +20,7 @@
 3. Multi-sheet revenue performance summary
 4. Exa investor shortlist + portfolio ARR/MRR comps
 5. Partner contacts + per-person enrichment
-6. Playwright PDF → Supabase only (`OUTREACH_SUPABASE_*` or `DEMO_SUPABASE_*`). No local `output/` write.
+6. Playwright PDF → Supabase only (`SUPABASE_*`, folder `outreach/`). No local `output/` write.
 
 ## Result
 

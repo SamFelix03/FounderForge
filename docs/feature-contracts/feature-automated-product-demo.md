@@ -122,8 +122,8 @@ Work files use `os.tmpdir()` and are deleted in `finally`. Firecrawl `stopIntera
 | Browser + screencast | Firecrawl interact + CDP | `FIRECRAWL_API_KEY` |
 | TTS | Deepgram Aura (`DEEPGRAM_TTS_MODEL`, default `aura-2-thalia-en`) | `DEEPGRAM_API_KEY` |
 | Mux / probe | ffmpeg / ffprobe (static or PATH) | — |
-| Object store | Supabase Storage REST (default prefix `demos/`) — **separate project from Feature 5** | `DEMO_SUPABASE_URL`, `DEMO_SUPABASE_SERVICE_ROLE_KEY`, `DEMO_SUPABASE_STORAGE_BUCKET` |
-| Signed URL TTL (optional) | — | `DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN` or `DEMO_URL_TTL_SECONDS` |
+| Object store | Supabase Storage REST — **shared Feature 5 project**, prefix `demos/` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET=reports` |
+| Signed URL TTL (optional) | defaults to `REPORT_URL_TTL_SECONDS` (7d) | `DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN` or `REPORT_URL_TTL_SECONDS` |
 | Job store | Postgres | `DATABASE_URL` |
 | Orchestration | Temporal | `TEMPORAL_ADDRESS`, `TEMPORAL_TASK_QUEUE` |
 
@@ -134,7 +134,7 @@ Work files use `os.tmpdir()` and are deleted in `finally`. Firecrawl `stopIntera
 ```bash
 # 1) Postgres + Redis + Temporal via docker compose
 # 2) Env: DATABASE_URL, TEMPORAL_*, FIRECRAWL_API_KEY, GEMINI_API_KEY,
-#    DEEPGRAM_API_KEY, DEMO_SUPABASE_*
+#    DEEPGRAM_API_KEY, SUPABASE_*
 
 pnpm install
 pnpm --filter @founderforge/db migrate

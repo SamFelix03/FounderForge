@@ -1,8 +1,7 @@
 /**
- * Upload outreach PDFs to Supabase Storage.
- * Env: OUTREACH_SUPABASE_* (same pattern as brandkitForge), with DEMO_SUPABASE_* fallback.
- * OUTREACH_SUPABASE_SIGNED_URL_EXPIRES_IN=0 → public URL
- * >0 → signed URL with that TTL in seconds
+ * Upload outreach PDFs to Supabase Storage (shared Feature 5 project).
+ * Credentials: SUPABASE_* (canonical). Optional OUTREACH_SUPABASE_* / DEMO_SUPABASE_* overrides.
+ * Signed TTL defaults to REPORT_URL_TTL_SECONDS (7d). Set …_EXPIRES_IN=0 for public URLs.
  */
 
 import { randomUUID } from "node:crypto";
@@ -25,29 +24,36 @@ function env(...names: string[]): string {
 
 export function supabaseConfigured(): boolean {
   return Boolean(
-    env("OUTREACH_SUPABASE_URL", "DEMO_SUPABASE_URL") &&
-      env("OUTREACH_SUPABASE_SERVICE_ROLE_KEY", "DEMO_SUPABASE_SERVICE_ROLE_KEY"),
+    env("SUPABASE_URL", "OUTREACH_SUPABASE_URL", "DEMO_SUPABASE_URL") &&
+      env(
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "OUTREACH_SUPABASE_SERVICE_ROLE_KEY",
+        "DEMO_SUPABASE_SERVICE_ROLE_KEY",
+      ),
   );
 }
 
 export function getSupabaseConfig(): SupabaseConfig {
-  const supabaseUrl = env("OUTREACH_SUPABASE_URL", "DEMO_SUPABASE_URL");
+  const supabaseUrl = env("SUPABASE_URL", "OUTREACH_SUPABASE_URL", "DEMO_SUPABASE_URL");
   const supabaseServiceRoleKey = env(
+    "SUPABASE_SERVICE_ROLE_KEY",
     "OUTREACH_SUPABASE_SERVICE_ROLE_KEY",
     "DEMO_SUPABASE_SERVICE_ROLE_KEY",
   );
   if (!supabaseUrl || !supabaseServiceRoleKey) {
     throw new Error(
-      "Missing OUTREACH_SUPABASE_URL + OUTREACH_SUPABASE_SERVICE_ROLE_KEY (or DEMO_SUPABASE_*) in .env",
+      "Missing SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env",
     );
   }
 
+  const signedRaw = env(
+    "OUTREACH_SUPABASE_SIGNED_URL_EXPIRES_IN",
+    "OUTREACH_REPORT_URL_TTL_SECONDS",
+    "DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN",
+    "REPORT_URL_TTL_SECONDS",
+  );
   const signedExpires = Number.parseInt(
-    env(
-      "OUTREACH_SUPABASE_SIGNED_URL_EXPIRES_IN",
-      "OUTREACH_REPORT_URL_TTL_SECONDS",
-      "DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN",
-    ) || "0",
+    signedRaw || String(60 * 60 * 24 * 7),
     10,
   );
 
@@ -55,11 +61,17 @@ export function getSupabaseConfig(): SupabaseConfig {
     supabaseUrl,
     supabaseServiceRoleKey,
     supabaseBucket:
-      env("OUTREACH_SUPABASE_STORAGE_BUCKET", "DEMO_SUPABASE_STORAGE_BUCKET") || "demoforge",
+      env(
+        "OUTREACH_SUPABASE_STORAGE_BUCKET",
+        "SUPABASE_STORAGE_BUCKET",
+        "DEMO_SUPABASE_STORAGE_BUCKET",
+      ) || "reports",
     supabaseObjectPrefix: (
       env("OUTREACH_SUPABASE_OBJECT_PREFIX") || "outreach"
     ).trim(),
-    supabaseSignedUrlExpiresIn: Number.isFinite(signedExpires) ? signedExpires : 0,
+    supabaseSignedUrlExpiresIn: Number.isFinite(signedExpires)
+      ? signedExpires
+      : 60 * 60 * 24 * 7,
   };
 }
 

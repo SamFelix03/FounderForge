@@ -143,7 +143,7 @@ export async function compileRedditReport(
 
   if (!supabaseConfigured()) {
     throw new Error(
-      "Reddit report upload requires REDDIT_DOC_SUPABASE_URL + REDDIT_DOC_SUPABASE_SERVICE_ROLE_KEY (or DEMO_SUPABASE_*).",
+      "Reddit report upload requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.",
     );
   }
 

@@ -1,5 +1,5 @@
 /**
- * Upload screenshot images to Supabase (demoforge/images).
+ * Upload screenshot images to Supabase (`reports/images` by default).
  * Final videos are NEVER uploaded — Segmind hosts the video URL.
  */
 import fs from "node:fs";
@@ -71,30 +71,26 @@ export function loadPromoStorageFromEnv(): {
   supabaseObjectPrefix: string;
   supabaseSignedUrlExpiresIn: number;
 } {
-  const supabaseUrl =
-    envOr("DEMO_SUPABASE_URL") ||
-    envOr("SUPABASE_URL") ||
-    "";
+  // Prefer shared Feature 5 project (`SUPABASE_*`).
+  const supabaseUrl = envOr("SUPABASE_URL") || envOr("DEMO_SUPABASE_URL") || "";
   const supabaseServiceRoleKey =
-    envOr("DEMO_SUPABASE_SERVICE_ROLE_KEY") ||
-    envOr("SUPABASE_SERVICE_ROLE_KEY") ||
-    "";
+    envOr("SUPABASE_SERVICE_ROLE_KEY") || envOr("DEMO_SUPABASE_SERVICE_ROLE_KEY") || "";
   const supabaseBucket =
-    envOr("DEMO_SUPABASE_STORAGE_BUCKET") ||
     envOr("SUPABASE_STORAGE_BUCKET") ||
-    "demoforge";
+    envOr("DEMO_SUPABASE_STORAGE_BUCKET") ||
+    "reports";
   const supabaseObjectPrefix =
     envOr("PROMO_SUPABASE_OBJECT_PREFIX") || "images";
   const signedExpires = Number.parseInt(
     envOr("DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN") ||
-      envOr("SUPABASE_SIGNED_URL_EXPIRES_IN") ||
-      "0",
+      envOr("REPORT_URL_TTL_SECONDS") ||
+      String(60 * 60 * 24 * 7),
     10,
   );
 
   if (!supabaseUrl || !supabaseServiceRoleKey) {
     throw new Error(
-      "Promo image storage requires DEMO_SUPABASE_URL + DEMO_SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_*)",
+      "Promo image storage requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY",
     );
   }
 
@@ -105,7 +101,7 @@ export function loadPromoStorageFromEnv(): {
     supabaseObjectPrefix,
     supabaseSignedUrlExpiresIn: Number.isFinite(signedExpires)
       ? signedExpires
-      : 0,
+      : 60 * 60 * 24 * 7,
   };
 }
 

@@ -11,9 +11,8 @@ Price / SLA: **$4.99 / 30 min**
 
 1. Copy `env.example` → `.env` and fill:
    - `FIRECRAWL_API_KEY`, `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`
-   - `DEMO_SUPABASE_URL`, `DEMO_SUPABASE_SERVICE_ROLE_KEY`, `DEMO_SUPABASE_STORAGE_BUCKET`
-     (separate from Feature 5 `SUPABASE_*`)
-   - Optional: `GEMINI_TEXT_MODEL`, `DEEPGRAM_TTS_MODEL`, `DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN`
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET=reports`
+   - Optional: `GEMINI_TEXT_MODEL`, `DEEPGRAM_TTS_MODEL`, `REPORT_URL_TTL_SECONDS`, `DEMO_SUPABASE_OBJECT_PREFIX=demos`
    - Local: `PAYMENTS_BYPASS=true`, `DATABASE_URL`, `TEMPORAL_*`
 2. From `FounderForge/`: `pnpm install` (installs Playwright Chromium via service `postinstall`)
 3. Infra: `docker compose -f infra/docker/docker-compose.yml up -d` (Postgres, Redis, Temporal)
@@ -77,4 +76,4 @@ Orchestrator / service logs should show `stopInteraction` / `Closing browser ses
 | `temporal_enqueue_failed` | Temporal up; orchestrator connected to same task queue |
 | Missing API key errors | `.env` loaded by gateway + orchestrator |
 | Odd-dimension ffmpeg errors | Pipeline applies `scale=trunc(iw/2)*2:…`; check ffmpeg-static installed |
-| Supabase upload 4xx | Check `DEMO_SUPABASE_*` (not Feature 5 `SUPABASE_*`); bucket exists; public vs signed TTL |
+| Supabase upload 4xx | Check `SUPABASE_*` (Feature 5 project); `reports` bucket exists; folder prefix `demos/` |

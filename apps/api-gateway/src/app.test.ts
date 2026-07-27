@@ -51,7 +51,11 @@ describe("api-gateway", { skip: !hasDb }, () => {
     });
 
     const mod = await import("./app.js");
-    app = await mod.createApp({ jobStore: store, skipMigrate: true });
+    app = await mod.createApp({
+      jobStore: store,
+      skipMigrate: true,
+      skipPayments: true,
+    });
   });
 
   after(async () => {
@@ -132,20 +136,16 @@ describe("api-gateway", { skip: !hasDb }, () => {
     assert.equal(again.status, "completed");
   });
 
-  it("returns 402 when payments bypass is off and creds missing", async () => {
+  it("refuses to start paid mode without OKX credentials", async () => {
     process.env.PAYMENTS_BYPASS = "false";
     delete process.env.OKX_API_KEY;
     delete process.env.OKX_SECRET_KEY;
     delete process.env.OKX_PASSPHRASE;
     const { createApp } = await import("./app.js");
-    const paidApp = await createApp({ jobStore: store, skipMigrate: true });
-
-    const res = await request(paidApp)
-      .post("/v1/services/competitor-research/jobs")
-      .send({ input: { product_name: "X" } });
-
-    assert.equal(res.status, 402);
-    assert.ok(res.headers["payment-required"]);
+    await assert.rejects(
+      () => createApp({ jobStore: store, skipMigrate: true }),
+      /OKX_API_KEY|OKX Payment SDK/,
+    );
     process.env.PAYMENTS_BYPASS = "true";
   });
 });

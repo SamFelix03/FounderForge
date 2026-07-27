@@ -1,9 +1,9 @@
-import express, { type Express } from "express";
+import express, { type Express, type RequestHandler } from "express";
 import { createLogger } from "@founderforge/observability";
 import {
-  createBypassOrChallengeMiddleware,
+  createOkxPaymentProtection,
   loadPaymentEnv,
-  tryCreateOkxPaymentMiddleware,
+  type OkxPaymentProtection,
 } from "@founderforge/payments-okx";
 import { createPool, migrate, getJobStore, setJobStoreForTests, PostgresJobStore } from "@founderforge/db";
 import { jobsRouter } from "./routes/jobs.js";
@@ -15,9 +15,28 @@ export interface CreateAppOptions {
   /** Skip DB migrate (tests that inject a store). */
   skipMigrate?: boolean;
   jobStore?: PostgresJobStore;
+  /**
+   * Force-skip OKX middleware (unit tests). Prefer PAYMENTS_BYPASS=true for local runs.
+   * When payments are enabled, missing/invalid OKX config throws at startup.
+   */
+  skipPayments?: boolean;
+}
+
+export interface AppWithPayments {
+  app: Express;
+  /** Call after listen when OKX middleware is attached. */
+  initializePayments?: () => Promise<void>;
+  payments?: OkxPaymentProtection;
 }
 
 export async function createApp(opts: CreateAppOptions = {}): Promise<Express> {
+  const { app } = await createAppWithPayments(opts);
+  return app;
+}
+
+export async function createAppWithPayments(
+  opts: CreateAppOptions = {},
+): Promise<AppWithPayments> {
   if (opts.jobStore) {
     setJobStoreForTests(opts.jobStore);
   } else if (!opts.skipMigrate) {
@@ -33,14 +52,18 @@ export async function createApp(opts: CreateAppOptions = {}): Promise<Express> {
   app.use(idempotencyMiddleware);
 
   const paymentEnv = loadPaymentEnv();
-  const okxMiddleware = await tryCreateOkxPaymentMiddleware(paymentEnv);
-  if (okxMiddleware) {
-    app.use(okxMiddleware);
-    log.info("OKX payment middleware attached");
+  const skipPayments = opts.skipPayments === true || paymentEnv.bypass;
+
+  let payments: OkxPaymentProtection | undefined;
+  if (skipPayments) {
+    log.warn("OKX payment middleware skipped (PAYMENTS_BYPASS or skipPayments)");
   } else {
-    app.use(createBypassOrChallengeMiddleware(paymentEnv));
-    log.info("payment bypass/challenge middleware attached", {
-      bypass: paymentEnv.bypass,
+    payments = createOkxPaymentProtection(paymentEnv);
+    app.use(payments.middleware as RequestHandler);
+    log.info("OKX payment middleware attached", {
+      network: payments.network,
+      payTo: payments.payTo,
+      routes: payments.routeCount,
     });
   }
 
@@ -53,5 +76,9 @@ export async function createApp(opts: CreateAppOptions = {}): Promise<Express> {
     res.status(500).json({ error: "internal_error" });
   });
 
-  return app;
+  return {
+    app,
+    payments,
+    initializePayments: payments ? () => payments!.initialize() : undefined,
+  };
 }

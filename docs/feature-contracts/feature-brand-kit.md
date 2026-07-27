@@ -22,7 +22,7 @@
 4. Google Fonts download + CSS/HTML
 5. Color palette + typography specimen PNGs
 6. Icons + social banners
-7. Zip → Supabase (`BRANDKIT_SUPABASE_*` or `DEMO_SUPABASE_*`)
+7. Zip → Supabase (`SUPABASE_*`, folder `brandkit/`)
 
 ## Result
 
@@ -36,4 +36,4 @@ pnpm --filter @founderforge/brand-kit-service live -- \
   --description 'calm meditation app, minimalist wellness'
 ```
 
-Requires `GOOGLE_SERVICE_ACCOUNT_JSON` and `BRANDKIT_SUPABASE_*` (or DEMO_*).
+Requires `GOOGLE_SERVICE_ACCOUNT_JSON` and `SUPABASE_*` (Feature 5 project).

@@ -53,7 +53,7 @@ function loadRuntimeConfig(
 
 /**
  * Full promo pipeline:
- * discover → screenshot → upload images to demoforge/images → script → Seedance
+ * discover → screenshot → upload images to reports/images → script → Seedance
  * Artifact video URL is Segmind-hosted (never uploaded to Supabase).
  */
 export async function runPipeline(

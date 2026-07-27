@@ -6,7 +6,7 @@ List price: **$2.99** per call (see `docs/pricing/pricing.md`). Settlement via O
 
 **Defaults:** `duration` **15**, `resolution` **720p**, `max_pages` **6**. Screenshots are viewport-only (above-the-fold).
 
-**Runtime requirements:** Postgres (`DATABASE_URL`), Temporal (`TEMPORAL_ADDRESS`), orchestrator worker, Firecrawl, Gemini, Segmind Seedance, Supabase Storage for **reference images** (`DEMO_SUPABASE_*` + `PROMO_SUPABASE_OBJECT_PREFIX=images`).
+**Runtime requirements:** Postgres (`DATABASE_URL`), Temporal (`TEMPORAL_ADDRESS`), orchestrator worker, Firecrawl, Gemini, Segmind Seedance, shared Supabase Storage for **reference images** (`SUPABASE_*` + `PROMO_SUPABASE_OBJECT_PREFIX=images`).
 
 ---
 
@@ -82,7 +82,7 @@ List price: **$2.99** per call (see `docs/pricing/pricing.md`). Settlement via O
 |---|---|---|
 | discover | `discover.ts` | Firecrawl map + Gemini rank important pages |
 | screenshots | `screenshots.ts` | Viewport (1440×900) Firecrawl captures |
-| upload_images | `storage.ts` | Upload PNGs to `demoforge/images/` |
+| upload_images | `storage.ts` | Upload PNGs to `reports/images/` |
 | script | `script.ts` | Multimodal Gemini → Seedance prompt + VO |
 | video | `video.ts` | Segmind Seedance 2.0 submit + poll |
 
@@ -106,8 +106,8 @@ Expect stdout with a Segmind `https://images.segmind.com/...mp4`. Do **not** pas
 | `FIRECRAWL_API_KEY` | Map + viewport screenshots |
 | `GEMINI_API_KEY` / `GEMINI_TEXT_MODEL` | Rank pages + killer script |
 | `SEGMIND_API_KEY` | Seedance 2.0 |
-| `DEMO_SUPABASE_URL` / `DEMO_SUPABASE_SERVICE_ROLE_KEY` | Image storage |
-| `DEMO_SUPABASE_STORAGE_BUCKET` | Default `demoforge` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Shared Feature 5 Storage |
+| `SUPABASE_STORAGE_BUCKET` | Default `reports` |
 | `PROMO_SUPABASE_OBJECT_PREFIX` | Default `images` |
 
 ---

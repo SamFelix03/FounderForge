@@ -96,7 +96,7 @@ Examples:
   if (!process.env.SEGMIND_API_KEY) throw new Error("SEGMIND_API_KEY missing");
   if (!supabaseConfigured()) {
     throw new Error(
-      "Image Supabase Storage required (DEMO_SUPABASE_URL + DEMO_SUPABASE_SERVICE_ROLE_KEY)",
+      "Image Supabase Storage required (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)",
     );
   }
 

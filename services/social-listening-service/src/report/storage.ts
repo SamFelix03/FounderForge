@@ -1,6 +1,6 @@
 /**
- * Upload Reddit recommendation PDFs to Supabase Storage.
- * Env: REDDIT_DOC_SUPABASE_* with DEMO_SUPABASE_* fallback.
+ * Upload Reddit recommendation PDFs to Supabase Storage (shared Feature 5 project).
+ * Credentials: SUPABASE_* (canonical). Optional REDDIT_DOC_SUPABASE_* / DEMO_SUPABASE_* overrides.
  */
 
 import { randomUUID } from "node:crypto";
@@ -23,8 +23,9 @@ function env(...names: string[]): string {
 
 export function supabaseConfigured(): boolean {
   return Boolean(
-    env("REDDIT_DOC_SUPABASE_URL", "DEMO_SUPABASE_URL") &&
+    env("SUPABASE_URL", "REDDIT_DOC_SUPABASE_URL", "DEMO_SUPABASE_URL") &&
       env(
+        "SUPABASE_SERVICE_ROLE_KEY",
         "REDDIT_DOC_SUPABASE_SERVICE_ROLE_KEY",
         "DEMO_SUPABASE_SERVICE_ROLE_KEY",
       ),
@@ -32,15 +33,18 @@ export function supabaseConfigured(): boolean {
 }
 
 export function getSupabaseConfig(): SupabaseConfig {
-  const supabaseUrl = env("REDDIT_DOC_SUPABASE_URL", "DEMO_SUPABASE_URL");
+  const supabaseUrl = env(
+    "SUPABASE_URL",
+    "REDDIT_DOC_SUPABASE_URL",
+    "DEMO_SUPABASE_URL",
+  );
   const supabaseServiceRoleKey = env(
+    "SUPABASE_SERVICE_ROLE_KEY",
     "REDDIT_DOC_SUPABASE_SERVICE_ROLE_KEY",
     "DEMO_SUPABASE_SERVICE_ROLE_KEY",
   );
   if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error(
-      "Missing REDDIT_DOC_SUPABASE_URL + REDDIT_DOC_SUPABASE_SERVICE_ROLE_KEY (or DEMO_SUPABASE_*) in .env",
-    );
+    throw new Error("Missing SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env");
   }
 
   const signedExpires = Number.parseInt(
@@ -48,7 +52,8 @@ export function getSupabaseConfig(): SupabaseConfig {
       "REDDIT_DOC_SIGNED_URL_EXPIRES_IN",
       "REDDIT_DOC_SUPABASE_SIGNED_URL_EXPIRES_IN",
       "DEMO_SUPABASE_SIGNED_URL_EXPIRES_IN",
-    ) || "0",
+      "REPORT_URL_TTL_SECONDS",
+    ) || String(60 * 60 * 24 * 7),
     10,
   );
 
@@ -58,14 +63,15 @@ export function getSupabaseConfig(): SupabaseConfig {
     supabaseBucket:
       env(
         "REDDIT_DOC_SUPABASE_STORAGE_BUCKET",
+        "SUPABASE_STORAGE_BUCKET",
         "DEMO_SUPABASE_STORAGE_BUCKET",
-      ) || "demoforge",
+      ) || "reports",
     supabaseObjectPrefix: (
       env("REDDIT_DOC_SUPABASE_OBJECT_PREFIX") || "reddit"
     ).trim(),
     supabaseSignedUrlExpiresIn: Number.isFinite(signedExpires)
       ? signedExpires
-      : 0,
+      : 60 * 60 * 24 * 7,
   };
 }
 
