@@ -1,23 +1,16 @@
 [
   {
-    "url": "https://www.reddit.com/r/AI_Agents/comments/1sodvwo/im_tired_of_giving_my_ai_agents_api_keys_to_do/",
-    "title": "I'm tired of giving my AI agents api keys to do one off tasks, so I found an alternative",
-    "selftext": "I'm frustrated having to manage dozens of API keys and subscriptions for each tool my AI agent uses (Twitter, Reddit, TikTok, etc.). I'm looking for a way to give my agent a wallet so it can pay per API call without separate accounts.",
-    "subreddit": "AI_Agents",
-    "why": "The post directly complains about managing multiple API keys and seeks a unified payment solution for AI agents."
+    "url": "https://www.reddit.com/r/nocode/comments/1k6rezv/build_nocode_ai_agents_for_free_using_lyzr_ai/",
+    "title": "Build No-Code AI Agents for Free Using Lyzr AI Studio",
+    "selftext": "Lyzr Agent Studio is a powerful low-code platform designed for both technical and non-technical users to build, deploy, and manage AI agents in just minutes. Instead of writing scripts, you can assemble agents using an intuitive no-code wizard, making advanced AI accessible to everyone. Effortless Integration & Automation Out-of-the-box connectors for AWS, Google, and custom APIs allow your agents to fetch data or trigger workflows instantly, with zero setup required. Choose from a marketplace of pre-built agents for sales, marketing, HR, customer support, finance, and more, or customize your own to fit any workflow. The platform supports seamless integration with over numeroud third-party apps and enterprise systems, including Salesforce, SAP, ServiceNow, Google Drive, and Notion. Lyzr [...] # Build No-Code AI Agents for Free Using Lyzr AI Studio\n\n## Post details\nr/nocode | 2 upvotes | 8 comments | Posted by u/techblooded on 2025-04-24T12:51:17.375Z [...] ## Content",
+    "subreddit": "nocode",
+    "why": "matched Tavily search (reddit.com)"
   },
   {
-    "url": "https://www.reddit.com/r/AI_Agents/comments/1u9xylq/how_should_autonomous_ai_agents_pay_for_tools_and/",
-    "title": "How should autonomous AI agents pay for tools and APIs?",
-    "selftext": "The API has to be able to accept a per‑call payment without an account existing at all. Almost every API still wants a signup, a key, and a...",
+    "url": "https://www.reddit.com/r/AI_Agents/comments/1id4k53/a_fully_programmable_platform_for_building_ai/",
+    "title": "A Fully Programmable Platform for Building AI Voice Agents",
+    "selftext": "Hi everyone, I’ve seen a few discussions around here about building AI voice agents, and I wanted to share something I’ve been working on to see if it's helpful to anyone: Jay – a fully programmable platform for building and deploying AI voice agents. I'd love to hear any feedback you guys have on it! One of the challenges I’ve noticed when building AI voice agents is balancing customizability with ease of deployment and maintenance. Many existing solutions are either too rigid (Vapi, Retell, Bland) or require dealing with your own infrastructure (Pipecat, Livekit). Jay solves this by allowing developers to write lightweight functions for their agents in Python, deploy them instantly, and integrate any third-party provider (LLMs, STT, TTS, databases, rag pipelines, agent frameworks, [...] STT, TTS, databases, rag pipelines, agent frameworks, etc)—without dealing with infrastructure. Key features: Fully programmable – Write your own logic for LLM responses and tools, respond to various events throughout the lifecycle of the call with python code. Zero infrastructure management – No need to host or scale your own voice pipelines. You can deploy a production agent using your own custom logic in less than half an hour. Flexible tool integrations – Write python code to integrate your own APIs, databases, or any other external service. Ultra-low latency (~300ms network avg) – Optimized for real-time voice interactions. Supports major AI providers – OpenAI, Deepgram, ElevenLabs, and more out of the box with the ability to integrate other external systems yourself. Would love to [...] # A Fully Programmable Platform for Building AI Voice Agents\n\n## Post details\nr/AI_Agents | 11 upvotes | 21 comments | Posted by u/SpyOnMeMrKarp on 2025-01-29T21:03:33.448Z",
     "subreddit": "AI_Agents",
-    "why": "The OP asks for a way for agents to pay per call without separate API keys, matching the request for a unified account."
-  },
-  {
-    "url": "https://www.reddit.com/r/defi/comments/1tuwpkp/single_use_virtual_cards_might_be_the_answer_to/",
-    "title": "Single use virtual cards might be the answer to the AI agent payment problem",
-    "selftext": "Discusses using crypto‑native virtual cards to let agents make purchases without holding a standing wallet, aiming to simplify payment across multiple services.",
-    "subreddit": "defi",
-    "why": "While focused on virtual cards, the post addresses the broader problem of unified payment for AI agents across many APIs."
+    "why": "matched Tavily search (reddit.com)"
   }
 ]

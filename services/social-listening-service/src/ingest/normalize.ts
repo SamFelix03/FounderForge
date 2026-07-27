@@ -11,6 +11,7 @@ export function makeEvent(partial: {
   permalink: string;
   thread_context?: string;
   parent_id?: string;
+  suggested_reply?: string;
 }): NormalizedEvent {
   return {
     platform: partial.platform,
@@ -23,6 +24,7 @@ export function makeEvent(partial: {
     permalink: partial.permalink,
     thread_context: (partial.thread_context || "").trim(),
     parent_id: partial.parent_id,
+    suggested_reply: partial.suggested_reply?.trim() || undefined,
   };
 }
 

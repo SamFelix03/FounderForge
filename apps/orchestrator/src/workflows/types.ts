@@ -50,9 +50,10 @@ export interface SocialListeningWorkflowInput {
 
 export interface SocialListeningWorkflowResult {
   product_name: string;
-  posted_urls: string[];
-  posts_attempted: number;
-  live: boolean;
+  pdf_url: string;
+  object_key: string;
+  thread_urls: string[];
+  recommendations_count: number;
   cost_breakdown: CostLine[];
 }
 

@@ -1,6 +1,5 @@
 /**
- * Ingest: product → need statement → Tavily Reddit threads → NormalizedEvent[].
- * No scoring — Tavily results are treated as the shortlist.
+ * Ingest: product → need statement → Tavily Reddit threads (+ suggested comments) → events.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -10,12 +9,9 @@ import { generateNeedStatement } from "../product/needStatement.js";
 import type { NormalizedEvent, ProductConfig } from "../types.js";
 import { makeEvent } from "./normalize.js";
 import {
-  canFetchRedditViaPlaywright,
-  fetchRedditThreadsViaPlaywright,
-} from "./playwrightContent.js";
-import {
   discoverRedditThreadsViaTavily,
   type TavilyDiscoverHit,
+  type TavilyResearchMeta,
 } from "./tavilyReddit.js";
 
 const log = createLogger("ingest.tavily.pipeline");
@@ -45,6 +41,7 @@ function hitsToEvents(hits: TavilyDiscoverHit[]): NormalizedEvent[] {
       author: "[tavily]",
       permalink: h.url,
       thread_context: [sub ? `r/${sub}` : "", h.why || ""].filter(Boolean).join("\n"),
+      suggested_reply: h.suggested_comment,
     });
   });
 }
@@ -52,8 +49,8 @@ function hitsToEvents(hits: TavilyDiscoverHit[]): NormalizedEvent[] {
 async function discoverHits(
   need: string,
   maxThreads: number,
-): Promise<TavilyDiscoverHit[]> {
-  // Research-only — no Search fallback (Search returns noisy launch threads).
+  product: ProductConfig,
+): Promise<{ hits: TavilyDiscoverHit[]; meta: TavilyResearchMeta }> {
   const mode = envOr("TAVILY_REDDIT_MODE", "research").toLowerCase();
   if (mode !== "research") {
     throw new Error(
@@ -61,11 +58,14 @@ async function discoverHits(
     );
   }
 
-  const { hits } = await discoverRedditThreadsViaTavily({
+  return discoverRedditThreadsViaTavily({
     needStatement: need,
     maxThreads,
+    product: {
+      name: product.product_name,
+      oneLiner: product.one_liner,
+    },
   });
-  return hits;
 }
 
 export async function ingestRedditViaTavily(
@@ -84,21 +84,22 @@ export async function ingestRedditViaTavily(
   const need = await generateNeedStatement(product);
   log.info("tavily need statement", { need: need.slice(0, 240) });
 
-  const hits = await discoverHits(need, maxThreads);
+  const { hits, meta } = await discoverHits(need, maxThreads, product);
   if (!hits.length) {
     log.warn("tavily discovery returned 0 threads");
     return [];
   }
 
-  const outFile = path.join(projectRoot(), "scripts", "tavily-discovered-threads.json");
-  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  const scriptsDir = path.join(projectRoot(), "scripts");
+  fs.mkdirSync(scriptsDir, { recursive: true });
   fs.writeFileSync(
-    outFile,
+    path.join(scriptsDir, "tavily-discovered-threads.json"),
     JSON.stringify(
       hits.map((h) => ({
         url: h.url,
         title: h.title,
         selftext: h.selftext,
+        suggested_comment: h.suggested_comment,
         ...(h.subreddit ? { subreddit: h.subreddit } : {}),
         ...(h.why ? { why: h.why } : {}),
       })),
@@ -106,34 +107,21 @@ export async function ingestRedditViaTavily(
       2,
     ),
   );
-  log.info("saved tavily threads", { path: outFile, n: hits.length });
-
-  // Prefer live thread bodies when a Reddit session exists; else use Tavily snippets
-  if (canFetchRedditViaPlaywright()) {
-    try {
-      const urls = hits.map((h) => h.url);
-      const fetched = await fetchRedditThreadsViaPlaywright(urls, {
-        maxCommentsPerThread: 0,
-      });
-      const posts = fetched.filter((e) => e.external_id.startsWith("post_"));
-      if (posts.length) {
-        log.info("tavily ingest done (playwright content)", {
-          discovered: hits.length,
-          events: posts.length,
-        });
-        return posts.slice(0, maxThreads);
-      }
-    } catch (err) {
-      log.warn("playwright content fetch failed — using tavily snippets", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+  fs.writeFileSync(
+    path.join(scriptsDir, "tavily-discovered-threads.raw.json"),
+    JSON.stringify(meta, null, 2),
+  );
+  log.info("saved tavily threads", { n: hits.length, model: meta.model });
 
   const events = hitsToEvents(hits).slice(0, maxThreads);
-  log.info("tavily ingest done (snippets)", {
+  log.info("tavily ingest done", {
     discovered: hits.length,
     events: events.length,
+    withComments: events.filter((e) => e.suggested_reply).length,
   });
   return events;
 }
+
+/** Tavily-only Reddit ingest. */
+export const canIngestReddit = canIngestViaTavily;
+export const ingestReddit = ingestRedditViaTavily;

@@ -105,9 +105,10 @@ export const PromoVideoInputSchema = z.object({
 });
 export type PromoVideoInput = z.infer<typeof PromoVideoInputSchema>;
 
-/** Social listening — product URL in, Reddit comment URLs out. */
+/** Social listening — product URL in, Reddit engagement PDF report out. */
 export const SocialListeningInputSchema = z.object({
   product_url: z.string().url(),
+  /** @deprecated Ignored — pipeline no longer auto-posts. */
   live: z.boolean().default(false),
   max_posts: z.number().int().min(1).max(20).optional(),
 });

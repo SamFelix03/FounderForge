@@ -15,15 +15,16 @@ export async function runSocialListeningActivity(args: {
   max_posts?: number;
 }): Promise<{
   product_name: string;
-  posted_urls: string[];
-  posts_attempted: number;
-  live: boolean;
+  pdf_url: string;
+  object_key: string;
+  thread_urls: string[];
+  recommendations_count: number;
   cost_breakdown: Output["cost_breakdown"];
 }> {
   log.info("starting social listening pipeline", {
     job_id: args.job_id,
     product_url: args.product_url,
-    live: args.live ?? false,
+    max_posts: args.max_posts ?? null,
   });
 
   const heartbeatTimer = setInterval(() => {
@@ -51,9 +52,10 @@ export async function runSocialListeningActivity(args: {
 
     return {
       product_name: result.product_name,
-      posted_urls: result.posted_urls,
-      posts_attempted: result.posts_attempted,
-      live: result.live,
+      pdf_url: result.pdf_url,
+      object_key: result.object_key,
+      thread_urls: result.thread_urls,
+      recommendations_count: result.recommendations_count,
       cost_breakdown: result.cost_breakdown,
     };
   } finally {

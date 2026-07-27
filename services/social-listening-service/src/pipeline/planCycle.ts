@@ -1,21 +1,11 @@
 import { reviewCompliance } from "../agents/compliance.js";
 import { dedupAndRateLimit } from "../agents/dedup.js";
 import { writeDraft } from "../agents/draft.js";
-import {
-  insertCandidate,
-  insertScheduledPost,
-  resetMemoryStore,
-  updateScheduledPost,
-  upsertEvent,
-} from "../db/repos.js";
-import { recordSuccessfulPost } from "../feedback/learn.js";
-import { canIngestViaCompound } from "../ingest/compoundIngest.js";
-import { canIngestViaTavily } from "../ingest/tavilyIngest.js";
+import { insertCandidate, resetMemoryStore, upsertEvent } from "../db/repos.js";
 import { canIngestReddit, ingestReddit } from "../ingest/reddit.js";
-import { envOr } from "../config.js";
 import { createLogger } from "../log.js";
-import { executePost } from "../post/executor.js";
 import { discoverProductFromUrl } from "../product/discover.js";
+import { compileRedditReport } from "../report/compileReport.js";
 import { formatInterval } from "../schedule/spread24h.js";
 import type {
   DraftCandidate,
@@ -25,29 +15,33 @@ import type {
 
 const log = createLogger("pipeline.plan");
 
-export interface PlanPostResult {
+export interface PlanRecommendation {
   targetPermalink: string;
   draftText: string;
-  status: "posted" | "dry_run" | "skipped" | "failed";
-  resultPermalink?: string;
-  error?: string;
+  draftRationale: string;
+  title: string;
+  threadContext: string;
+  status: "included" | "skipped";
   community?: string | null;
+  skipReason?: string;
 }
 
 export interface PlanResult {
   product: ProductConfig;
-  posts: PlanPostResult[];
+  recommendations: PlanRecommendation[];
   n: number;
   intervalLabel: string;
-  live: boolean;
+  report: {
+    pdf_url: string;
+    object_key: string;
+    bytes: number;
+  };
 }
 
 /**
- * Plan cycle: discover product → Tavily threads → draft → post.
- * No embedding / signal scoring — Tavily results are trusted.
+ * Tavily research → suggested comments → PDF on Supabase. No browser, no posting.
  */
 export async function runPlanCycle(opts: {
-  live: boolean;
   websiteUrl: string;
   product?: ProductConfig;
   maxPosts?: number;
@@ -73,27 +67,13 @@ export async function runPlanCycle(opts: {
     product: product.product_name,
     website: opts.websiteUrl,
     maxN,
-    live: opts.live,
   });
 
   if (!canIngestReddit()) {
-    throw new Error(
-      "Need TAVILY_API_KEY (preferred), or GROQ + Reddit session / RAPIDAPI_KEY",
-    );
+    throw new Error("TAVILY_API_KEY is required for Reddit thread discovery");
   }
 
-  const ingestLabel = (() => {
-    const pref = envOr("REDDIT_INGEST", "tavily").toLowerCase();
-    if (pref === "tavily" || (pref === "auto" && canIngestViaTavily())) {
-      return "Tavily → draft";
-    }
-    if (pref === "reddapi") return "ReddAPI";
-    if (pref === "compound" || pref === "playwright" || canIngestViaCompound()) {
-      return "Compound → Playwright";
-    }
-    return canIngestViaTavily() ? "Tavily → draft" : "ReddAPI";
-  })();
-  log.info("reddit ingest", { provider: ingestLabel, subs: product.subreddits });
+  log.info("reddit ingest", { provider: "tavily", subs: product.subreddits });
 
   await phase("discover_threads");
   const events = await ingestReddit(product).catch((err) => {
@@ -108,7 +88,8 @@ export async function runPlanCycle(opts: {
   log.info("ingested threads", { total: events.length, using: threads.length });
 
   await phase("draft");
-  const ready: Array<{ candidateId: string; candidate: DraftCandidate }> = [];
+  const ready: DraftCandidate[] = [];
+  const skipped: PlanRecommendation[] = [];
   const funnel = { ingested: threads.length, dedup: 0, draft: 0, compliance: 0 };
 
   for (const event of threads) {
@@ -120,25 +101,51 @@ export async function runPlanCycle(opts: {
         stage: "dedup",
         reason: dedup.reason || "fail",
       });
+      skipped.push({
+        targetPermalink: event.permalink,
+        draftText: "",
+        draftRationale: "",
+        title: event.title,
+        threadContext: event.thread_context,
+        status: "skipped",
+        community: event.community,
+        skipReason: dedup.reason || "dedup",
+      });
       continue;
     }
     funnel.dedup += 1;
 
     const eventId = await upsertEvent(event);
 
-    let draft;
-    try {
-      draft = await writeDraft(event, product);
-    } catch (err) {
-      log.warn("draft failed", {
-        id: event.external_id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      continue;
+    let draftText = event.suggested_reply?.trim() || "";
+    let draftRationale = draftText ? "From Tavily research" : "";
+
+    if (!draftText || draftText.length < 40) {
+      try {
+        const draft = await writeDraft(event, product);
+        draftText = draft.draft_text;
+        draftRationale = draft.draft_rationale;
+      } catch (err) {
+        log.warn("draft failed", {
+          id: event.external_id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        skipped.push({
+          targetPermalink: event.permalink,
+          draftText: "",
+          draftRationale: "",
+          title: event.title,
+          threadContext: event.thread_context,
+          status: "skipped",
+          community: event.community,
+          skipReason: err instanceof Error ? err.message : "draft failed",
+        });
+        continue;
+      }
     }
     funnel.draft += 1;
 
-    const compliance = await reviewCompliance(event, product, draft.draft_text);
+    const compliance = await reviewCompliance(event, product, draftText);
     if (!compliance.ok) {
       await upsertEvent(event, {
         stage: "compliance",
@@ -148,81 +155,76 @@ export async function runPlanCycle(opts: {
         id: event.external_id,
         reason: compliance.notes,
       });
+      skipped.push({
+        targetPermalink: event.permalink,
+        draftText,
+        draftRationale,
+        title: event.title,
+        threadContext: event.thread_context,
+        status: "skipped",
+        community: event.community,
+        skipReason: compliance.notes || "compliance",
+      });
       continue;
     }
     funnel.compliance += 1;
 
     const candidate: DraftCandidate = {
       event,
-      draft_text: draft.draft_text,
-      draft_rationale: draft.draft_rationale,
+      draft_text: draftText,
+      draft_rationale: draftRationale,
       compliance_ok: true,
       compliance_notes: compliance.notes,
     };
 
-    const candidateId = await insertCandidate(eventId, candidate);
-    ready.push({ candidateId, candidate });
+    await insertCandidate(eventId, candidate);
+    ready.push(candidate);
   }
 
   const N = ready.length;
   const intervalLabel = formatInterval(product.window_hours, N);
   log.info("funnel", funnel);
 
-  const posts: PlanPostResult[] = [];
-
-  await phase("post");
-  for (let index = 0; index < ready.length; index++) {
-    const { candidateId, candidate: c } = ready[index]!;
-    const scheduledId = await insertScheduledPost({
-      candidateId,
-      platform: c.event.platform,
-      targetRef: c.event.external_id,
-      community: c.event.community,
-      draftText: c.draft_text,
-      permalinkTarget: c.event.permalink,
-      scheduledAt: new Date(Date.now() + index * 3_000),
-    });
-
-    const row = {
-      id: scheduledId,
-      candidate_id: candidateId,
-      platform: c.event.platform,
-      target_ref: c.event.external_id,
-      community: c.event.community,
-      draft_text: c.draft_text,
-      permalink_target: c.event.permalink,
-      scheduled_at: new Date(),
-      status: "pending" as const,
-      posted_at: null,
-      result_permalink: null,
-      error: null,
-    };
-
-    const result = await executePost(row, opts.live);
-    await updateScheduledPost(scheduledId, {
-      status: result.status,
-      resultPermalink: result.permalink ?? null,
-      error: result.error ?? null,
-    });
-    if (result.status === "posted" || result.status === "dry_run") {
-      await recordSuccessfulPost(row);
-    }
-
-    posts.push({
+  const recommendations: PlanRecommendation[] = [
+    ...ready.map((c) => ({
       targetPermalink: c.event.permalink,
       draftText: c.draft_text,
-      status: result.status,
-      resultPermalink: result.permalink,
-      error: result.error,
+      draftRationale: c.draft_rationale,
+      title: c.event.title,
+      threadContext: c.event.thread_context,
+      status: "included" as const,
       community: c.event.community,
-    });
-  }
+    })),
+    ...skipped,
+  ];
+
+  await phase("compile_report");
+  const compiled = await compileRedditReport({
+    generatedAt: new Date().toISOString(),
+    websiteUrl: opts.websiteUrl,
+    product,
+    subreddits: product.subreddits,
+    recommendations: ready.map((c) => ({
+      community: c.event.community,
+      title: c.event.title,
+      permalink: c.event.permalink,
+      threadContext: c.event.thread_context,
+      draftText: c.draft_text,
+      draftRationale: c.draft_rationale,
+    })),
+  });
+
+  log.info("report ready", {
+    pdf_url: compiled.report.pdf_url,
+    object_key: compiled.report.object_key,
+    recommendations: N,
+  });
 
   return {
     product,
-    posts,
+    recommendations,
     n: N,
     intervalLabel,
-    live: opts.live,
+    report: compiled.report,
   };
 }

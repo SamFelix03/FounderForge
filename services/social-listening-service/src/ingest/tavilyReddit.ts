@@ -15,6 +15,8 @@ export type TavilyDiscoverHit = {
   selftext: string;
   subreddit?: string;
   why?: string;
+  /** Draft comment Tavily suggests for this thread. */
+  suggested_comment?: string;
 };
 
 export const REDDIT_THREADS_OUTPUT_SCHEMA = {
@@ -43,6 +45,11 @@ export const REDDIT_THREADS_OUTPUT_SCHEMA = {
             type: "string",
             description: "Why this post matches the need (one sentence)",
           },
+          suggested_comment: {
+            type: "string",
+            description:
+              "Natural Reddit reply for this thread: helpful peer tone, no URLs, no CTAs, mention the product by name once if relevant",
+          },
         },
         required: ["url", "title", "selftext", "subreddit"],
       },
@@ -58,8 +65,12 @@ export const REDDIT_THREADS_OUTPUT_SCHEMA = {
 export function buildRedditOnlyResearchPrompt(
   needStatement: string,
   maxThreads: number,
+  product?: { name: string; oneLiner: string },
 ): string {
   const need = needStatement.trim().replace(/^\{|\}$/g, "").trim();
+  const productHint = product
+    ? `\n- When writing suggested_comment, the commenter knows about "${product.name}" (${product.oneLiner}). Mention ${product.name} once naturally if relevant. No URLs in comments.`
+    : "";
   return `Fetch Reddit posts where {${need}} I want ONLY reddit posts and NOTHING else.
 
 Rules:
@@ -67,9 +78,10 @@ Rules:
 - ONLY seeker posts: people looking for a tool, workaround, recommendation, or help.
 - EXCLUDE founder launches / showcases: "I built", "I'm building", "just launched", "feedback on my", product demos, Show HN.
 - Each item must include a real /r/.../comments/.../ URL (not a subreddit homepage, user profile, or wiki).
-- Return at most ${maxThreads} threads.
+- Return at least 1 and at most ${maxThreads} threads.
 - Do not invent URLs. If unsure a URL is real, omit it.
-- Output must match the provided JSON schema (threads array).`;
+- Output must match the provided JSON schema (threads array).
+- For EVERY thread include suggested_comment: a ready-to-post Reddit reply (2–4 short paragraphs, peer tone, no links).${productHint}`;
 }
 
 function ensureRedditThreadUrl(raw: string): string | null {
@@ -90,15 +102,30 @@ function ensureRedditThreadUrl(raw: string): string | null {
   }
 }
 
+function extractThreadsArray(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (!raw || typeof raw !== "object") return [];
+  const o = raw as Record<string, unknown>;
+  if (Array.isArray(o.threads)) return o.threads;
+  for (const key of ["output", "result", "data", "response"]) {
+    const nested = o[key];
+    if (nested && typeof nested === "object") {
+      const arr = extractThreadsArray(nested);
+      if (arr.length) return arr;
+    }
+  }
+  if (typeof o.content === "string") {
+    try {
+      return extractThreadsArray(JSON.parse(o.content));
+    } catch {
+      /* prose content — harvest handles URLs */
+    }
+  }
+  return [];
+}
+
 function normalizeHits(raw: unknown): TavilyDiscoverHit[] {
-  const threads =
-    raw &&
-    typeof raw === "object" &&
-    Array.isArray((raw as { threads?: unknown }).threads)
-      ? (raw as { threads: unknown[] }).threads
-      : Array.isArray(raw)
-        ? raw
-        : [];
+  const threads = extractThreadsArray(raw);
 
   const out: TavilyDiscoverHit[] = [];
   const seen = new Set<string>();
@@ -117,16 +144,44 @@ function normalizeHits(raw: unknown): TavilyDiscoverHit[] {
         .replace(/^r\//i, "")
         .trim() || undefined,
       why: o.why ? String(o.why) : undefined,
+      suggested_comment: String(
+        o.suggested_comment || o.comment || o.draft || "",
+      ).trim() || undefined,
     });
   }
   return out;
 }
 
-/** Also harvest reddit.com /comments/ links from free-text report + sources. */
+/** Harvest thread URLs from Tavily content blob and structured sources list. */
 function harvestFromSources(
   content: unknown,
   sources: unknown,
 ): TavilyDiscoverHit[] {
+  const out: TavilyDiscoverHit[] = [];
+  const seen = new Set<string>();
+
+  const push = (hit: TavilyDiscoverHit) => {
+    if (!hit.url || seen.has(hit.url)) return;
+    seen.add(hit.url);
+    out.push(hit);
+  };
+
+  if (Array.isArray(sources)) {
+    for (const row of sources) {
+      if (!row || typeof row !== "object") continue;
+      const s = row as Record<string, unknown>;
+      const url = ensureRedditThreadUrl(String(s.url || s.link || ""));
+      if (!url) continue;
+      push({
+        url,
+        title: String(s.title || "").trim() || "(from Tavily sources)",
+        selftext: String(s.content || s.snippet || s.rawContent || "").trim(),
+        subreddit: url.match(/reddit\.com\/r\/([^/]+)/i)?.[1],
+        why: "from Tavily research sources",
+      });
+    }
+  }
+
   const blob = [
     typeof content === "string" ? content : JSON.stringify(content ?? ""),
     JSON.stringify(sources ?? []),
@@ -134,20 +189,18 @@ function harvestFromSources(
   const urls = blob.match(
     /https?:\/\/(?:www\.|old\.|np\.)?reddit\.com\/r\/[^/\s)"']+\/comments\/[a-z0-9]+(?:\/[^/\s)"']*)?/gi,
   );
-  if (!urls?.length) return [];
-  const out: TavilyDiscoverHit[] = [];
-  const seen = new Set<string>();
-  for (const raw of urls) {
+  for (const raw of urls || []) {
     const url = ensureRedditThreadUrl(raw);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    out.push({
+    if (!url) continue;
+    push({
       url,
       title: "(from Tavily sources)",
       selftext: "",
       subreddit: url.match(/reddit\.com\/r\/([^/]+)/i)?.[1],
+      why: "harvested from Tavily report text",
     });
   }
+
   return out;
 }
 
@@ -248,6 +301,7 @@ export async function discoverRedditThreadsViaTavily(opts: {
   model?: "mini" | "pro" | "auto";
   pollMs?: number;
   timeoutMs?: number;
+  product?: { name: string; oneLiner: string };
 }): Promise<{ hits: TavilyDiscoverHit[]; meta: TavilyResearchMeta }> {
   const maxThreads = opts.maxThreads ?? envInt("TAVILY_REDDIT_LIMIT", 10);
   const model = (opts.model ||
@@ -255,7 +309,11 @@ export async function discoverRedditThreadsViaTavily(opts: {
   const pollMs = opts.pollMs ?? envInt("TAVILY_POLL_MS", 3_000);
   const timeoutMs = opts.timeoutMs ?? envInt("TAVILY_RESEARCH_TIMEOUT_MS", 180_000);
 
-  const prompt = buildRedditOnlyResearchPrompt(opts.needStatement, maxThreads);
+  const prompt = buildRedditOnlyResearchPrompt(
+    opts.needStatement,
+    maxThreads,
+    opts.product,
+  );
   const client = tavilyClient();
   const started = Date.now();
 
@@ -339,6 +397,14 @@ export async function discoverRedditThreadsViaTavily(opts: {
     kept: hits.length,
     elapsedMs: meta.elapsedMs,
   });
+
+  if (hits.length === 0) {
+    log.warn("tavily research returned 0 threads — falling back to Tavily search");
+    return discoverRedditThreadsViaTavilySearch({
+      needStatement: opts.needStatement,
+      maxThreads,
+    });
+  }
 
   return { hits, meta };
 }

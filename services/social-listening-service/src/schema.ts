@@ -7,23 +7,24 @@ import {
 export const InputSchema = SocialListeningInputSchema;
 export type Input = z.infer<typeof InputSchema>;
 
-export const PostResultSchema = z.object({
+export const RecommendationSchema = z.object({
   target_permalink: z.string(),
   draft_text: z.string(),
-  status: z.enum(["posted", "dry_run", "skipped", "failed"]),
-  result_permalink: z.string().optional(),
-  error: z.string().optional(),
+  title: z.string().optional(),
+  status: z.enum(["included", "skipped"]),
   community: z.string().nullable().optional(),
+  skip_reason: z.string().optional(),
 });
 
 export const OutputSchema = z.object({
   product_name: z.string(),
-  posted_urls: z.array(z.string()),
-  posts: z.array(PostResultSchema),
-  posts_attempted: z.number().int().nonnegative(),
-  live: z.boolean(),
+  pdf_url: z.string().url(),
+  object_key: z.string(),
+  thread_urls: z.array(z.string()),
+  recommendations: z.array(RecommendationSchema),
+  recommendations_count: z.number().int().nonnegative(),
   cost_breakdown: z.array(CostLineSchema),
 });
 
 export type Output = z.infer<typeof OutputSchema>;
-export type PostResult = z.infer<typeof PostResultSchema>;
+export type Recommendation = z.infer<typeof RecommendationSchema>;

@@ -23,6 +23,8 @@ export interface NormalizedEvent {
   permalink: string;
   thread_context: string;
   parent_id?: string;
+  /** Ready-to-post comment from Tavily research (when available). */
+  suggested_reply?: string;
 }
 
 /** Draft ready to schedule / post (Tavily shortlist — no scores). */

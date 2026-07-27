@@ -32,11 +32,19 @@ export async function socialListeningWorkflow(
       max_posts: input.max_posts,
     });
 
-    const artifacts = result.posted_urls.map((url) => ({
-      type: "reddit_comment",
-      url,
-      mime_type: "text/uri-list",
-    }));
+    const artifacts = [
+      {
+        type: "pdf_report",
+        url: result.pdf_url,
+        mime_type: "application/pdf",
+        object_key: result.object_key,
+      },
+      ...result.thread_urls.map((url) => ({
+        type: "reddit_thread",
+        url,
+        mime_type: "text/uri-list",
+      })),
+    ];
 
     await short.completeJob(input.job_id, {
       artifacts,
@@ -45,9 +53,10 @@ export async function socialListeningWorkflow(
 
     return {
       product_name: result.product_name,
-      posted_urls: result.posted_urls,
-      posts_attempted: result.posts_attempted,
-      live: result.live,
+      pdf_url: result.pdf_url,
+      object_key: result.object_key,
+      thread_urls: result.thread_urls,
+      recommendations_count: result.recommendations_count,
       cost_breakdown: result.cost_breakdown,
     };
   } catch (err) {

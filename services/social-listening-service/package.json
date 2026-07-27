@@ -17,11 +17,6 @@
     "clean": "rm -rf dist",
     "test": "echo \"no tests yet\"",
     "live": "tsx src/scripts/live-run.ts",
-    "reddit:vm-smoke": "tsx src/scripts/smoke-vm-browser.ts",
-    "reddit:comment-smoke": "tsx src/scripts/smoke-playwright-comment.ts",
-    "reddit:diagnose-post": "tsx src/scripts/diagnose-reddit-post.ts",
-    "reddit:push-session": "tsx src/scripts/push-reddit-session.ts",
-    "reddit:pull-session": "tsx src/scripts/pull-reddit-session.ts",
     "tavily:reddit": "tsx src/scripts/tavily-reddit-discover.ts"
   },
   "dependencies": {
@@ -34,12 +29,12 @@
     "@xenova/transformers": "^2.17.2",
     "chalk": "^5.4.1",
     "dotenv": "^16.5.0",
-    "playwright": "^1.62.0",
-    "proxy-chain": "^3.0.0",
+    "pdfkit": "^0.17.1",
     "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "@types/pdfkit": "^0.13.9",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   }
