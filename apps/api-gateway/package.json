@@ -16,6 +16,7 @@
     "@founderforge/observability": "workspace:*",
     "@founderforge/payments-okx": "workspace:*",
     "@founderforge/schemas": "workspace:*",
+    "@founderforge/temporal": "workspace:*",
     "@temporalio/client": "^1.11.8",
     "express": "^5.1.0",
     "uuid": "^11.1.0",

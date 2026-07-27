@@ -1,13 +1,18 @@
 import { Connection, Client } from "@temporalio/client";
 import { createLogger } from "@founderforge/observability";
+import {
+  loadTemporalEnv,
+  temporalConnectOptions,
+} from "@founderforge/temporal";
 
 const log = createLogger("temporal.client");
 
 export function temporalConfig() {
+  const cfg = loadTemporalEnv();
   return {
-    address: process.env.TEMPORAL_ADDRESS?.trim() || "localhost:7233",
-    namespace: process.env.TEMPORAL_NAMESPACE?.trim() || "default",
-    taskQueue: process.env.TEMPORAL_TASK_QUEUE?.trim() || "founderforge",
+    address: cfg.address,
+    namespace: cfg.namespace,
+    taskQueue: cfg.taskQueue,
   };
 }
 
@@ -16,10 +21,14 @@ let clientPromise: Promise<Client> | undefined;
 export async function getTemporalClient(): Promise<Client> {
   if (!clientPromise) {
     clientPromise = (async () => {
-      const { address, namespace } = temporalConfig();
-      const connection = await Connection.connect({ address });
-      const client = new Client({ connection, namespace });
-      log.info("temporal client connected", { address, namespace });
+      const cfg = loadTemporalEnv();
+      const connection = await Connection.connect(temporalConnectOptions(cfg));
+      const client = new Client({ connection, namespace: cfg.namespace });
+      log.info("temporal client connected", {
+        address: cfg.address,
+        namespace: cfg.namespace,
+        tls: cfg.tls,
+      });
       return client;
     })();
   }

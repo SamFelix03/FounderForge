@@ -1,6 +1,10 @@
 import { NativeConnection, Worker } from "@temporalio/worker";
 import { createLogger, loadRootEnv } from "@founderforge/observability";
 import { createPool, migrate, getJobStore, PostgresJobStore, setJobStoreForTests } from "@founderforge/db";
+import {
+  loadTemporalEnv,
+  temporalConnectOptions,
+} from "@founderforge/temporal";
 import * as activities from "./activities/index.js";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -9,16 +13,8 @@ loadRootEnv();
 
 const log = createLogger("orchestrator");
 
-function requireEnv(name: string, fallback?: string): string {
-  const value = process.env[name]?.trim() || fallback;
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}
-
 async function main() {
-  const address = requireEnv("TEMPORAL_ADDRESS", "localhost:7233");
-  const namespace = requireEnv("TEMPORAL_NAMESPACE", "default");
-  const taskQueue = requireEnv("TEMPORAL_TASK_QUEUE", "founderforge");
+  const cfg = loadTemporalEnv();
 
   // Durable job updates from activities
   const pool = createPool();
@@ -26,7 +22,7 @@ async function main() {
   setJobStoreForTests(new PostgresJobStore(pool));
   getJobStore();
 
-  const connection = await NativeConnection.connect({ address });
+  const connection = await NativeConnection.connect(temporalConnectOptions(cfg));
   const workflowsPath = path.join(
     path.dirname(fileURLToPath(import.meta.url)),
     "workflows",
@@ -34,13 +30,18 @@ async function main() {
 
   const worker = await Worker.create({
     connection,
-    namespace,
-    taskQueue,
+    namespace: cfg.namespace,
+    taskQueue: cfg.taskQueue,
     workflowsPath,
     activities,
   });
 
-  log.info("orchestrator worker started", { address, namespace, taskQueue });
+  log.info("orchestrator worker started", {
+    address: cfg.address,
+    namespace: cfg.namespace,
+    taskQueue: cfg.taskQueue,
+    tls: cfg.tls,
+  });
   await worker.run();
 }
 

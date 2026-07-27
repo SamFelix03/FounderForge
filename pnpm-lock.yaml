@@ -32,6 +32,9 @@ importers:
       '@founderforge/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@founderforge/temporal':
+        specifier: workspace:*
+        version: link:../../packages/temporal
       '@temporalio/client':
         specifier: ^1.11.8
         version: 1.21.0
@@ -128,6 +131,9 @@ importers:
       '@founderforge/social-listening-service':
         specifier: workspace:*
         version: link:../../services/social-listening-service
+      '@founderforge/temporal':
+        specifier: workspace:*
+        version: link:../../packages/temporal
       '@temporalio/activity':
         specifier: ^1.11.8
         version: 1.21.0
@@ -271,6 +277,18 @@ importers:
       zod:
         specifier: ^3.25.67
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.20.1
+      tsx:
+        specifier: ^4.20.3
+        version: 4.23.1
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/temporal:
     devDependencies:
       '@types/node':
         specifier: ^22.15.30

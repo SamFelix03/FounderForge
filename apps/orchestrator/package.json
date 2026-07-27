@@ -21,6 +21,7 @@
     "@founderforge/db": "workspace:*",
     "@founderforge/observability": "workspace:*",
     "@founderforge/schemas": "workspace:*",
+    "@founderforge/temporal": "workspace:*",
     "@temporalio/activity": "^1.11.8",
     "@temporalio/client": "^1.11.8",
     "@temporalio/worker": "^1.11.8",
