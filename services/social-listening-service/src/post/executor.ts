@@ -36,7 +36,7 @@ export async function executePost(
       return {
         status: "skipped",
         error:
-          "Need ReddAPI (RAPIDAPI_KEY + REDDAPI_PROXY + token_v2) or Playwright session — run `npm run reddit:session`",
+          "Need Playwright Reddit session — run reddit:session / set REDDIT_PROFILE_DIR",
       };
     }
 

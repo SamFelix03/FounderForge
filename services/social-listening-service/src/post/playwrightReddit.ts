@@ -1,26 +1,19 @@
 /**
  * Post Reddit comments via the persisted Playwright profile (.reddit-profile).
- * Replaces ReddAPI /api/comment — no RapidAPI write path needed.
+ * No ReddAPI — uses old.reddit form first, then www shreddit composer.
  */
-import fs from "node:fs";
-import path from "node:path";
-import { chromium, type BrowserContext, type Page } from "playwright";
-import { envOr, projectRoot, redditProfileDir } from "../config.js";
-import { createLogger } from "../log.js";
+import type { BrowserContext, Page } from "playwright";
 import {
-  hasLoggedInRedditSession,
-  loadRedditSessionCookies,
-} from "../redditSession.js";
-import {
-  parseProxy,
+  hasRedditProfile,
+  isRedditNetworkBlocked,
+  launchRedditChrome,
+  loadRedditProxies,
+  preferHeaded,
   type ParsedProxy,
-} from "../redditSessionRefresh.js";
+} from "../browser/redditChrome.js";
+import { createLogger } from "../log.js";
 
 const log = createLogger("post.playwright");
-
-const root = projectRoot();
-const ACTIVE_PROXY_FILE = path.join(root, "scripts", "active-proxy.txt");
-const PROXY_FILE = path.join(root, "scripts", "webshare-proxies.txt");
 
 let postLock: Promise<unknown> = Promise.resolve();
 
@@ -33,32 +26,9 @@ function withPostLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function loadProxies(): ParsedProxy[] {
-  const out: ParsedProxy[] = [];
-  const seen = new Set<string>();
-  const push = (raw: string) => {
-    const p = parseProxy(raw);
-    if (!p || seen.has(p.label)) return;
-    seen.add(p.label);
-    out.push(p);
-  };
-  push(envOr("REDDAPI_PROXY") || envOr("REDDIT_PROXY"));
-  if (fs.existsSync(ACTIVE_PROXY_FILE)) {
-    push(fs.readFileSync(ACTIVE_PROXY_FILE, "utf8"));
-  }
-  if (fs.existsSync(PROXY_FILE)) {
-    for (const line of fs.readFileSync(PROXY_FILE, "utf8").split(/\r?\n/)) {
-      push(line);
-    }
-  }
-  return out;
-}
-
 export function canPostViaPlaywright(): boolean {
-  return (
-    fs.existsSync(redditProfileDir()) &&
-    (hasLoggedInRedditSession() || Boolean(loadRedditSessionCookies()?.token_v2))
-  );
+  // Logged-in Chrome profile is enough; cookie JSON is optional cache.
+  return hasRedditProfile();
 }
 
 function thingIdFromTarget(permalink: string, targetRef: string): string | null {
@@ -75,9 +45,10 @@ function thingIdFromTarget(permalink: string, targetRef: string): string | null 
   return null;
 }
 
-async function isBlocked(page: Page): Promise<boolean> {
-  const body = await page.locator("body").innerText().catch(() => "");
-  return /blocked by network security|you've been blocked/i.test(body);
+function toOldReddit(url: string): string {
+  return url
+    .replace("www.reddit.com", "old.reddit.com")
+    .replace("new.reddit.com", "old.reddit.com");
 }
 
 async function postViaLegacyApi(
@@ -87,9 +58,11 @@ async function postViaLegacyApi(
 ): Promise<{ ok: boolean; permalink?: string; error?: string }> {
   const result = await page.evaluate(
     async ({ thingId: tid, text: bodyText }: { thingId: string; text: string }) => {
-      const cookie =
-        (globalThis as unknown as { document?: { cookie?: string } }).document
-          ?.cookie || "";
+      const g = globalThis as unknown as {
+        document?: { cookie?: string };
+        fetch: typeof fetch;
+      };
+      const cookie = g.document?.cookie || "";
       const csrf =
         cookie
           .split("; ")
@@ -102,11 +75,12 @@ async function postViaLegacyApi(
       });
       if (csrf) params.set("uh", decodeURIComponent(csrf));
 
-      const res = await fetch("https://www.reddit.com/api/comment", {
+      const res = await g.fetch("https://www.reddit.com/api/comment", {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
           accept: "application/json",
+          "x-requested-with": "XMLHttpRequest",
         },
         body: params.toString(),
         credentials: "include",
@@ -124,7 +98,6 @@ async function postViaLegacyApi(
   );
 
   const json = result.json as {
-    jquery?: unknown;
     success?: boolean;
     json?: {
       errors?: unknown[];
@@ -133,16 +106,18 @@ async function postViaLegacyApi(
   } | null;
 
   const errors = json?.json?.errors;
-  if (result.status >= 400 || (Array.isArray(errors) && errors.length)) {
+  if (
+    result.status >= 400 ||
+    (Array.isArray(errors) && errors.length) ||
+    typeof result.json === "string"
+  ) {
     return {
       ok: false,
       error: `api/comment ${result.status}: ${JSON.stringify(errors || result.raw).slice(0, 200)}`,
     };
   }
 
-  const permalink =
-    json?.json?.data?.things?.[0]?.data?.permalink ||
-    undefined;
+  const permalink = json?.json?.data?.things?.[0]?.data?.permalink;
   return {
     ok: true,
     permalink: permalink
@@ -153,28 +128,97 @@ async function postViaLegacyApi(
   };
 }
 
+async function postViaOldReddit(
+  page: Page,
+  url: string,
+  text: string,
+): Promise<{ ok: boolean; permalink?: string; error?: string }> {
+  const oldUrl = toOldReddit(url);
+  await page.goto(oldUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForTimeout(2000);
+
+  if (await isRedditNetworkBlocked(page)) {
+    return { ok: false, error: "blocked on old.reddit" };
+  }
+
+  const ta = page.locator('textarea[name="text"]').first();
+  if ((await ta.count()) === 0) {
+    return { ok: false, error: "old.reddit textarea not found" };
+  }
+  await ta.click();
+  await ta.fill(text);
+  const submit = page
+    .locator('button[type="submit"], button.save, .usertext-buttons .save')
+    .first();
+  if ((await submit.count()) > 0) {
+    await submit.click();
+  } else {
+    await page.keyboard.press("Control+Enter");
+  }
+  await page.waitForTimeout(3500);
+
+  const after = page.url();
+  const visible = await page.locator("body").innerText().catch(() => "");
+  const snippet = text.slice(0, Math.min(40, text.length));
+  if (visible.includes(snippet) || /\/comments\/.+\/\w+/.test(after)) {
+    return {
+      ok: true,
+      permalink: after.includes("reddit.com") ? after : url,
+    };
+  }
+  return { ok: false, error: "old.reddit comment not confirmed" };
+}
+
 async function postViaComposerUi(
   page: Page,
+  url: string,
   text: string,
-): Promise<{ ok: boolean; error?: string }> {
-  // Open composer if needed
-  const composers = [
+): Promise<{ ok: boolean; permalink?: string; error?: string }> {
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForTimeout(3000);
+
+  if (await isRedditNetworkBlocked(page)) {
+    return { ok: false, error: "blocked on www" };
+  }
+
+  for (const label of ["Accept all", "Accept", "Continue"]) {
+    const btn = page.getByRole("button", { name: label }).first();
+    if ((await btn.count()) > 0) {
+      await btn.click({ timeout: 2000 }).catch(() => {});
+      await page.waitForTimeout(400);
+    }
+  }
+
+  for (const name of ["Add a comment", "Add your reply", "Comment", "Reply"]) {
+    const el = page.getByText(name, { exact: false }).first();
+    if ((await el.count()) > 0) {
+      await el.click({ timeout: 2000 }).catch(() => {});
+      await page.waitForTimeout(600);
+    }
+  }
+
+  const selectors = [
+    'div[contenteditable="true"][data-lexical-editor="true"]',
+    'div[contenteditable="true"][role="textbox"]',
     'div[contenteditable="true"]',
     'div[role="textbox"]',
-    'textarea[name="text"]',
     "faceplate-textarea-input textarea",
+    "shreddit-composer textarea",
+    'textarea[name="text"]',
     "#CommentTree textarea",
+    '[slot="commentBox"] div[contenteditable="true"]',
   ];
 
   let filled = false;
-  for (const sel of composers) {
-    const el = page.locator(sel).first();
-    if ((await el.count()) === 0) continue;
+  for (const sel of selectors) {
+    const loc = page.locator(sel).first();
+    if ((await loc.count()) === 0) continue;
     try {
-      await el.click({ timeout: 3000 });
-      await el.fill(text, { timeout: 5000 }).catch(async () => {
-        await el.click();
-        await page.keyboard.type(text, { delay: 8 });
+      await loc.scrollIntoViewIfNeeded();
+      await loc.click({ timeout: 3000 });
+      await page.waitForTimeout(200);
+      await loc.fill(text).catch(async () => {
+        await page.keyboard.type(text, { delay: 5 });
       });
       filled = true;
       break;
@@ -182,6 +226,49 @@ async function postViaComposerUi(
       /* try next */
     }
   }
+
+  if (!filled) {
+    filled = await page.evaluate((t: string) => {
+      type El = {
+        shadowRoot?: unknown;
+        focus: () => void;
+        value?: string;
+        innerText?: string;
+        dispatchEvent: (e: unknown) => void;
+        tagName?: string;
+      };
+      type Root = {
+        querySelectorAll: (sel: string) => { forEach: (fn: (el: El) => void) => void };
+      };
+      const g = globalThis as unknown as {
+        document: Root & { body?: unknown };
+        Event: new (type: string, init?: { bubbles?: boolean }) => unknown;
+        InputEvent: new (type: string, init?: { bubbles?: boolean }) => unknown;
+      };
+      const deep: El[] = [];
+      const walk = (root: Root) => {
+        root.querySelectorAll("*").forEach((el) => {
+          if (el.shadowRoot) walk(el.shadowRoot as Root);
+        });
+        root
+          .querySelectorAll('[contenteditable="true"], textarea')
+          .forEach((el) => deep.push(el));
+      };
+      walk(g.document);
+      const target = deep[0];
+      if (!target) return false;
+      target.focus();
+      if ((target.tagName || "").toLowerCase() === "textarea") {
+        target.value = t;
+        target.dispatchEvent(new g.Event("input", { bubbles: true }));
+      } else {
+        target.innerText = t;
+        target.dispatchEvent(new g.InputEvent("input", { bubbles: true }));
+      }
+      return true;
+    }, text);
+  }
+
   if (!filled) {
     return { ok: false, error: "comment composer not found" };
   }
@@ -190,49 +277,96 @@ async function postViaComposerUi(
     .locator(
       'button:has-text("Comment"), button:has-text("Reply"), button[type="submit"]',
     )
-    .first();
-  if ((await submit.count()) === 0) {
-    await page.keyboard.press("Control+Enter");
+    .last();
+  if ((await submit.count()) > 0) {
+    await submit.click({ timeout: 5000 }).catch(async () => {
+      await page.keyboard.press("Control+Enter");
+    });
   } else {
-    await submit.click({ timeout: 5000 });
+    await page.keyboard.press("Control+Enter");
   }
-  await page.waitForTimeout(2500);
-  return { ok: true };
+  await page.waitForTimeout(4000);
+
+  const visible = await page.locator("body").innerText().catch(() => "");
+  const snippet = text.slice(0, Math.min(40, text.length));
+  if (visible.includes(snippet)) {
+    return { ok: true, permalink: page.url() };
+  }
+  return { ok: false, error: "www comment not confirmed on page" };
 }
 
 async function openContext(proxy: ParsedProxy | null): Promise<BrowserContext> {
-  const headed =
-    envOr("REDDIT_POST_HEADED", "true").toLowerCase() !== "false" &&
-    envOr("REDDIT_POST_HEADED") !== "0";
-
-  const launchOpts: Parameters<typeof chromium.launchPersistentContext>[1] = {
-    channel: "chrome",
-    headless: !headed,
-    viewport: { width: 1280, height: 900 },
-    locale: "en-US",
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--disable-dev-shm-usage",
-    ],
-    ignoreDefaultArgs: ["--enable-automation"],
-  };
-  if (proxy) {
-    launchOpts.proxy = {
-      server: proxy.server,
-      ...(proxy.username
-        ? { username: proxy.username, password: proxy.password }
-        : {}),
-    };
-  }
-
-  const context = await chromium.launchPersistentContext(
-    redditProfileDir(),
-    launchOpts,
-  );
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+  return launchRedditChrome({
+    proxy,
+    headed: preferHeaded("REDDIT_POST_HEADED", "true"),
   });
-  return context;
+}
+
+async function attemptPost(
+  proxy: ParsedProxy | null,
+  opts: {
+    permalinkTarget: string;
+    targetRef: string;
+    draftText: string;
+  },
+): Promise<{ permalink: string }> {
+  const targetUrl = opts.permalinkTarget.split("?")[0]!;
+  const thingId = thingIdFromTarget(targetUrl, opts.targetRef);
+
+  log.info("playwright comment", {
+    url: targetUrl.slice(0, 80),
+    thingId,
+    proxy: proxy?.label || "none",
+  });
+
+  const context = await openContext(proxy);
+  try {
+    const page = context.pages()[0] || (await context.newPage());
+
+    // 1) old.reddit classic form — most reliable without ReddAPI
+    const old = await postViaOldReddit(page, targetUrl, opts.draftText);
+    if (old.ok) {
+      log.info("posted via old.reddit", {
+        permalink: old.permalink?.slice(0, 80),
+      });
+      return { permalink: old.permalink || targetUrl };
+    }
+    log.warn("old.reddit failed", { error: old.error });
+
+    // 2) in-page /api/comment from www session
+    await page.goto(targetUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    await page.waitForTimeout(1500);
+    if (await isRedditNetworkBlocked(page)) {
+      throw new Error(
+        `Reddit blocked proxy ${proxy?.label || "direct"} during post`,
+      );
+    }
+    if (thingId) {
+      const api = await postViaLegacyApi(page, thingId, opts.draftText);
+      if (api.ok) {
+        log.info("posted via reddit /api/comment", {
+          permalink: api.permalink?.slice(0, 80),
+        });
+        return { permalink: api.permalink || targetUrl };
+      }
+      log.warn("api/comment failed", { error: api.error });
+    }
+
+    // 3) www shreddit composer
+    const ui = await postViaComposerUi(page, targetUrl, opts.draftText);
+    if (!ui.ok) {
+      throw new Error(ui.error || "Playwright comment failed");
+    }
+    log.info("posted via www composer", {
+      permalink: ui.permalink?.slice(0, 80),
+    });
+    return { permalink: ui.permalink || targetUrl };
+  } finally {
+    await context.close().catch(() => {});
+  }
 }
 
 /**
@@ -250,53 +384,28 @@ export async function postCommentViaPlaywright(opts: {
   }
 
   return withPostLock(async () => {
-    const proxies = loadProxies();
-    const proxy = proxies[0] || null;
-    const targetUrl = opts.permalinkTarget.split("?")[0]!;
-    const thingId = thingIdFromTarget(targetUrl, opts.targetRef);
+    const proxies = loadRedditProxies();
+    const attempts: Array<ParsedProxy | null> = [
+      ...proxies.slice(0, 3),
+      ...(proxies.length ? [] : [null]),
+    ];
+    if (!attempts.length) attempts.push(null);
 
-    log.info("playwright comment", {
-      url: targetUrl.slice(0, 80),
-      thingId,
-      proxy: proxy?.label || "none",
-    });
-
-    let context: BrowserContext | undefined;
-    try {
-      context = await openContext(proxy);
-      const page = context.pages()[0] || (await context.newPage());
-      await page.goto(targetUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: 60_000,
-      });
-      await page.waitForTimeout(2000);
-
-      if (await isBlocked(page)) {
-        throw new Error(
-          `Reddit blocked proxy ${proxy?.label || "direct"} during post`,
-        );
-      }
-
-      if (thingId) {
-        const api = await postViaLegacyApi(page, thingId, opts.draftText);
-        if (api.ok) {
-          log.info("posted via reddit /api/comment", {
-            permalink: api.permalink?.slice(0, 80),
-          });
-          return { permalink: api.permalink || targetUrl };
-        }
-        log.warn("api/comment failed — trying composer UI", {
-          error: api.error,
+    const errors: string[] = [];
+    for (const proxy of attempts) {
+      try {
+        return await attemptPost(proxy, opts);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${proxy?.label || "direct"}: ${msg}`);
+        log.warn("playwright comment attempt failed", {
+          proxy: proxy?.label || "none",
+          msg,
         });
       }
-
-      const ui = await postViaComposerUi(page, opts.draftText);
-      if (!ui.ok) {
-        throw new Error(ui.error || "Playwright comment failed");
-      }
-      return { permalink: targetUrl };
-    } finally {
-      await context?.close().catch(() => {});
     }
+    throw new Error(
+      `Playwright comment failed on all proxies.\n${errors.slice(0, 5).join("\n")}`,
+    );
   });
 }

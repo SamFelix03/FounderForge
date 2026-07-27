@@ -1,5 +1,10 @@
 import { createLogger } from "@founderforge/observability";
 import { runPlanCycle } from "./pipeline/planCycle.js";
+import {
+  ensureRedditSessionLocal,
+  redditSessionRemoteEnabled,
+  syncRedditSessionToStorageIfRemote,
+} from "./redditSessionStorage.js";
 import { InputSchema, type Input, type Output } from "./schema.js";
 
 const log = createLogger("social-listening.pipeline");
@@ -10,7 +15,8 @@ export interface PipelineOptions {
 
 /**
  * URL in → Reddit engagement pipeline → posted_urls out.
- * Default live=false (dry-run). Set input.live=true to post via ReddAPI.
+ * Default live=false (dry-run). Set input.live=true to post via Playwright (no ReddAPI).
+ * When REDDIT_SESSION_REMOTE is on, pulls Chrome profile + cookies from Supabase first.
  */
 export async function runPipeline(
   rawInput: Input,
@@ -23,6 +29,16 @@ export async function runPipeline(
     max_posts: input.max_posts ?? null,
   });
 
+  if (redditSessionRemoteEnabled()) {
+    await opts.onStep?.("reddit_session_pull");
+    const session = await ensureRedditSessionLocal();
+    log.info("reddit session paths", {
+      pulled: session.pulled,
+      profileDir: session.profileDir,
+      cookiesPath: session.cookiesPath,
+    });
+  }
+
   const costs: Output["cost_breakdown"] = [];
   const result = await runPlanCycle({
     live: input.live,
@@ -30,6 +46,10 @@ export async function runPipeline(
     maxPosts: input.max_posts,
     onStep: opts.onStep,
   });
+
+  if (input.live && redditSessionRemoteEnabled()) {
+    await syncRedditSessionToStorageIfRemote();
+  }
 
   costs.push({
     vendor: "llm",
@@ -45,9 +65,9 @@ export async function runPipeline(
     const posted = result.posts.filter((p) => p.status === "posted").length;
     if (posted > 0) {
       costs.push({
-        vendor: "reddapi",
+        vendor: "playwright",
         operation: "comment",
-        amount_usd: 0.01 * posted,
+        amount_usd: 0,
         units: posted,
       });
     }

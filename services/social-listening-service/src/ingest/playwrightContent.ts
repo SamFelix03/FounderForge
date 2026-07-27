@@ -2,41 +2,22 @@
  * Fetch Reddit thread post + comments via Playwright session (.json endpoint).
  * Public Reddit JSON is 403; logged-in profile works.
  */
-import fs from "node:fs";
-import path from "node:path";
-import { chromium, type BrowserContext, type Page } from "playwright";
-import { envInt, envOr, projectRoot, redditProfileDir } from "../config.js";
+import type { BrowserContext, Page } from "playwright";
+import {
+  hasRedditProfile,
+  isRedditNetworkBlocked,
+  launchRedditChrome,
+  preferHeaded,
+} from "../browser/redditChrome.js";
+import { envInt } from "../config.js";
 import { createLogger } from "../log.js";
-import { parseProxy, type ParsedProxy } from "../redditSessionRefresh.js";
 import type { NormalizedEvent } from "../types.js";
 import { makeEvent } from "./normalize.js";
 
 const log = createLogger("ingest.playwright.content");
-const root = projectRoot();
-const ACTIVE_PROXY_FILE = path.join(root, "scripts", "active-proxy.txt");
-const PROXY_FILE = path.join(root, "scripts", "webshare-proxies.txt");
 
 export function canFetchRedditViaPlaywright(): boolean {
-  return fs.existsSync(redditProfileDir());
-}
-
-function loadProxy(): ParsedProxy | null {
-  const candidates = [
-    envOr("REDDAPI_PROXY") || envOr("REDDIT_PROXY"),
-    fs.existsSync(ACTIVE_PROXY_FILE)
-      ? fs.readFileSync(ACTIVE_PROXY_FILE, "utf8")
-      : "",
-  ];
-  if (fs.existsSync(PROXY_FILE)) {
-    for (const line of fs.readFileSync(PROXY_FILE, "utf8").split(/\r?\n/)) {
-      candidates.push(line);
-    }
-  }
-  for (const c of candidates) {
-    const p = parseProxy(c);
-    if (p) return p;
-  }
-  return null;
+  return hasRedditProfile();
 }
 
 function threadJsonUrl(permalink: string): string {
@@ -55,45 +36,18 @@ function ensurePermalink(raw: string, fallbackId: string, sub: string): string {
 }
 
 async function openContext(): Promise<BrowserContext> {
-  const proxy = loadProxy();
-  const headed =
-    envOr("REDDIT_CONTENT_HEADED", "true").toLowerCase() !== "false" &&
-    envOr("REDDIT_CONTENT_HEADED") !== "0";
-
-  const context = await chromium.launchPersistentContext(redditProfileDir(), {
-    channel: "chrome",
-    headless: !headed,
-    viewport: { width: 1280, height: 900 },
-    locale: "en-US",
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--disable-dev-shm-usage",
-    ],
-    ignoreDefaultArgs: ["--enable-automation"],
-    ...(proxy
-      ? {
-          proxy: {
-            server: proxy.server,
-            ...(proxy.username
-              ? { username: proxy.username, password: proxy.password }
-              : {}),
-          },
-        }
-      : {}),
+  return launchRedditChrome({
+    headed: preferHeaded("REDDIT_CONTENT_HEADED", "true"),
   });
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-  });
-  return context;
 }
 
 async function readJsonFromPage(page: Page, url: string): Promise<unknown> {
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForTimeout(1200);
-  const bodyText = await page.locator("body").innerText().catch(() => "");
-  if (/blocked by network security|you've been blocked/i.test(bodyText)) {
+  if (await isRedditNetworkBlocked(page)) {
     throw new Error(`Reddit blocked while fetching ${url.slice(0, 80)}`);
   }
+  const bodyText = await page.locator("body").innerText().catch(() => "");
   const pre = await page.locator("pre").first().textContent().catch(() => null);
   const raw = (pre && pre.trim().startsWith("[") ? pre : bodyText).trim();
   return JSON.parse(raw);

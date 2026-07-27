@@ -16,7 +16,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "test": "echo \"no tests yet\"",
-    "live": "tsx src/scripts/live-run.ts"
+    "live": "tsx src/scripts/live-run.ts",
+    "reddit:vm-smoke": "tsx src/scripts/smoke-vm-browser.ts",
+    "reddit:comment-smoke": "tsx src/scripts/smoke-playwright-comment.ts",
+    "reddit:push-session": "tsx src/scripts/push-reddit-session.ts",
+    "reddit:pull-session": "tsx src/scripts/pull-reddit-session.ts"
   },
   "dependencies": {
     "@founderforge/schemas": "workspace:*",
