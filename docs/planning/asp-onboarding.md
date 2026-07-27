@@ -18,3 +18,5 @@
    ```
 
 Local dev uses `PAYMENTS_BYPASS=true` so create-job returns 202 without chain payment.
+
+**Full paid request → artifact walkthrough (buyer + poll):** [Paid ASP request runbook](../runbooks/paid-asp-request.md).
