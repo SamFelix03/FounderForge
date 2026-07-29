@@ -53,7 +53,13 @@ export const JobRecordSchema = z.object({
   artifacts: z.array(JobArtifactSchema).default([]),
   cost_breakdown: z.array(CostLineSchema).default([]),
   list_price_usd: z.number().nonnegative(),
+  /** Human-readable failure reason (codes stripped when encoded as `[code] …`). */
   error: z.string().optional(),
+  /**
+   * Stable machine code for scrape/discovery failures when present
+   * (e.g. product_url_no_content). Derived from encoded `error` text.
+   */
+  error_code: z.string().optional(),
   callback_url: z.string().url().optional(),
   idempotency_key: z.string().optional(),
   created_at: z.string().datetime(),
@@ -107,6 +113,11 @@ export type PromoVideoInput = z.infer<typeof PromoVideoInputSchema>;
 /** Social listening — product URL in, Reddit engagement PDF report out. */
 export const SocialListeningInputSchema = z.object({
   product_url: z.string().url(),
+  /**
+   * Optional fallback when the product URL cannot be scraped (SPA shell, dead host).
+   * Existing callers that only send product_url are unchanged.
+   */
+  product_name: z.string().min(1).max(120).optional(),
   /** @deprecated Ignored — pipeline no longer auto-posts. */
   live: z.boolean().default(false),
   max_posts: z.number().int().min(1).max(20).optional(),

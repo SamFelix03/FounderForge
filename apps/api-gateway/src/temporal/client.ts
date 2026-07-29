@@ -156,6 +156,7 @@ export async function enqueuePromoVideo(input: {
 export async function startSocialListeningWorkflow(input: {
   job_id: string;
   product_url: string;
+  product_name?: string;
   live?: boolean;
   max_posts?: number;
 }): Promise<string> {
@@ -186,6 +187,7 @@ export function setStartSocialListeningWorkflowForTests(
 export async function enqueueSocialListening(input: {
   job_id: string;
   product_url: string;
+  product_name?: string;
   live?: boolean;
   max_posts?: number;
 }): Promise<string> {

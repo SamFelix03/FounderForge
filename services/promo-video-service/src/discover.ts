@@ -2,6 +2,7 @@ import { Firecrawl } from "firecrawl";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { createLogger } from "@founderforge/observability";
+import { ProductUrlError, productUrlErrorFromFetchFailure } from "@founderforge/schemas";
 import { isTransientNetworkError, withRetries } from "./retry.js";
 import type { RuntimeConfig, SelectedPage } from "./types.js";
 import { truncate } from "./util.js";
@@ -211,8 +212,14 @@ export async function discoverImportantPages(
     });
   } catch (err) {
     if (isTransientNetworkError(err)) {
-      throw new Error(
-        `Cannot reach Firecrawl API (DNS/network): ${err instanceof Error ? err.message : err}`,
+      throw productUrlErrorFromFetchFailure(cfg.url, err);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/404|not found|unable to|failed to scrape|invalid url/i.test(msg)) {
+      throw new ProductUrlError(
+        /404|not found/i.test(msg) ? "product_url_http_error" : "product_url_unreachable",
+        `Could not map/scrape product site ${cfg.url}. ${msg}`,
+        { cause: err },
       );
     }
     throw err;

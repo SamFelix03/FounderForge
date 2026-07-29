@@ -27,6 +27,14 @@ describe("buildDiscoveryDocument", () => {
         (e) => e.path === "/v1/discovery" && e.method === "POST",
       ),
     );
+    assert.ok(doc.protocol.failures?.product_url_error_codes?.length);
+    assert.ok(
+      doc.protocol.failures?.product_url_error_codes.some(
+        (c) => c.code === "product_url_no_content",
+      ),
+    );
+    const social = doc.services.find((s) => s.name === "social-listening");
+    assert.ok(social?.provide.includes("product_name"));
   });
 
   it("coerces public http base URLs to https", () => {

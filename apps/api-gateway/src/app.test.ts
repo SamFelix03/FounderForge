@@ -82,6 +82,7 @@ describe("api-gateway", { skip: !hasDb }, () => {
     assert.equal(cr.a2mcp_price_usd, 1.0);
     assert.ok(cr.input_schema);
     assert.ok(cr.example_request?.input?.product_name);
+    assert.ok(res.body.protocol?.failures?.product_url_error_codes?.length);
   });
 
   it("serves free discovery document with protocol and schemas", async () => {
@@ -96,6 +97,15 @@ describe("api-gateway", { skip: !hasDb }, () => {
         (e: { path: string }) => e.path === "/v1/discovery",
       ),
     );
+    assert.ok(
+      res.body.protocol.failures.product_url_error_codes.some(
+        (c: { code: string }) => c.code === "product_url_no_content",
+      ),
+    );
+    const social = res.body.services.find(
+      (s: { name: string }) => s.name === "social-listening",
+    );
+    assert.match(String(social.provide), /product_name/);
     const brand = res.body.services.find(
       (s: { name: string }) => s.name === "brand-kit",
     );
@@ -181,6 +191,26 @@ describe("api-gateway", { skip: !hasDb }, () => {
     const again = await new PostgresJobStore(createPool()).get(create.body.job_id);
     assert.ok(again);
     assert.equal(again.status, "completed");
+  });
+
+  it("poll returns decoded error_code for scrape failures", async () => {
+    const created = await store.create(
+      "social-listening",
+      { input: { product_url: "https://trackly.app" }, priority: "normal" },
+      `scrape-err-${Date.now()}`,
+    );
+    await store.setStatus(
+      created.id,
+      "failed",
+      "[product_url_no_content] Could not extract readable product content from https://trackly.app",
+    );
+
+    const poll = await request(app).get(`/v1/jobs/${created.id}`);
+    assert.equal(poll.status, 200);
+    assert.equal(poll.body.status, "failed");
+    assert.equal(poll.body.error_code, "product_url_no_content");
+    assert.match(String(poll.body.error), /trackly\.app/);
+    assert.equal(poll.body.input, undefined);
   });
 
   it("refuses to start paid mode without OKX credentials", async () => {

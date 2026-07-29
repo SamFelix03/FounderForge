@@ -1,8 +1,9 @@
-import { heartbeat } from "@temporalio/activity";
+import { ApplicationFailure, heartbeat } from "@temporalio/activity";
 import {
   runPipeline,
   type Output,
 } from "@founderforge/promo-video-service";
+import { isProductUrlError } from "@founderforge/schemas";
 import { createLogger } from "@founderforge/observability";
 import { setJobStep } from "./jobs.js";
 
@@ -61,6 +62,11 @@ export async function runPromoVideoActivity(args: {
       concept: result.concept,
       cost_breakdown: result.cost_breakdown,
     };
+  } catch (err) {
+    if (isProductUrlError(err)) {
+      throw ApplicationFailure.nonRetryable(err.message, err.code);
+    }
+    throw err;
   } finally {
     clearInterval(heartbeatTimer);
   }

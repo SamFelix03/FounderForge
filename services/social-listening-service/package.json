@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
-    "test": "echo \"no tests yet\"",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "live": "tsx src/scripts/live-run.ts",
     "tavily:reddit": "tsx src/scripts/tavily-reddit-discover.ts"
   },

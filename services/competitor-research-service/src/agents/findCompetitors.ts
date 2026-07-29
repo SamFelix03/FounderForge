@@ -1,5 +1,6 @@
 import { fetchPageJina, webSearch } from "@founderforge/connectors";
 import { completeJson } from "@founderforge/llm-core";
+import { ProductUrlError } from "@founderforge/schemas";
 import type { Competitor, Input } from "../schema.js";
 
 function nameFromUrl(url: string): string {
@@ -43,6 +44,7 @@ export async function findCompetitors(
   const hits = [];
   let cost = 0;
   let productText = "";
+  let productUrlFetchFailed = false;
 
   for (const query of queries) {
     const result = await webSearch({ query, stub, num: 8 });
@@ -55,8 +57,13 @@ export async function findCompetitors(
       const page = await fetchPageJina({ url: input.product_url, stub });
       productText = page.data.text.slice(0, 2500);
       cost += page.meta.cost_usd;
+      if (productText.replace(/\s+/g, " ").trim().length < 80) {
+        productUrlFetchFailed = true;
+        productText = "";
+      }
     } catch {
-      /* continue */
+      /* Additive: product_name remains primary; URL enrichment is optional. */
+      productUrlFetchFailed = true;
     }
   }
 
@@ -78,6 +85,12 @@ export async function findCompetitors(
     .slice(0, 20);
 
   if (candidates.length === 0) {
+    if (input.product_url && productUrlFetchFailed) {
+      throw new ProductUrlError(
+        "product_url_no_content",
+        `Could not research competitors for "${input.product_name}": product URL ${input.product_url} yielded no readable content and web search returned no usable competitor candidates. Provide a scrapeable product_url or a clearer product_name.`,
+      );
+    }
     throw new Error("findCompetitors: no search candidates found");
   }
 

@@ -60,4 +60,26 @@ describe("PostgresJobStore", { skip: !hasDb }, () => {
     assert.ok(fetched);
     assert.equal(fetched.status, "completed");
   });
+
+  it("decodes encoded product URL errors into error_code", async () => {
+    const created = await store.create(
+      "social-listening",
+      {
+        input: { product_url: "https://trackly.app" },
+        priority: "normal",
+      },
+      `err-${Date.now()}`,
+    );
+    await store.setStatus(
+      created.id,
+      "failed",
+      "[product_url_no_content] Could not extract readable product content from https://trackly.app",
+    );
+    const failed = await store.get(created.id);
+    assert.ok(failed);
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.error_code, "product_url_no_content");
+    assert.match(failed.error ?? "", /trackly\.app/);
+    assert.doesNotMatch(failed.error ?? "", /^\[product_url_/);
+  });
 });

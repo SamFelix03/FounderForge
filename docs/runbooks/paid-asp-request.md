@@ -252,7 +252,9 @@ Job lifecycle:
 | `queued` | Accepted; waiting for Temporal worker |
 | `running` | Orchestrator activity in progress (`step` updates) |
 | `completed` | Artifacts ready |
-| `failed` | See `error` |
+| `failed` | See `error` and optional `error_code` (e.g. `product_url_no_content`) |
+
+Scrape-first services (`social-listening`, `promo-video`, `outreach`, and competitor research when URL scrape + search both fail) encode failures as `[error_code] human message`. Poll responses decode that into separate `error` + `error_code` fields. For social-listening, optional `input.product_name` lets the job continue when the URL cannot be scraped.
 
 `GET /v1/jobs/:id` does **not** require payment.
 

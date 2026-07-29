@@ -11,6 +11,8 @@ import {
   type Positioning,
   type PricingResult,
 } from "@founderforge/competitor-research-service";
+import { ApplicationFailure } from "@temporalio/activity";
+import { isProductUrlError } from "@founderforge/schemas";
 
 function parseInput(raw: { product_name: string; product_url?: string }): Input {
   return InputSchema.parse(raw);
@@ -23,7 +25,14 @@ export async function findCompetitorsActivity(raw: {
   competitors: Competitor[];
   cost_usd: number;
 }> {
-  return findCompetitors(parseInput(raw));
+  try {
+    return await findCompetitors(parseInput(raw));
+  } catch (err) {
+    if (isProductUrlError(err)) {
+      throw ApplicationFailure.nonRetryable(err.message, err.code);
+    }
+    throw err;
+  }
 }
 
 export async function diffFeaturesActivity(args: {

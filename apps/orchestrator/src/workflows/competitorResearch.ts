@@ -4,6 +4,7 @@
  */
 import { proxyActivities, ApplicationFailure } from "@temporalio/workflow";
 import type * as activities from "../activities/index.js";
+import { workflowFailureMessage } from "./failureMessage.js";
 import type {
   CompetitorResearchWorkflowInput,
   CompetitorResearchWorkflowResult,
@@ -117,8 +118,7 @@ export async function competitorResearchWorkflow(
       cost_breakdown,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await short.failJob(input.job_id, message).catch(() => undefined);
+    await short.failJob(input.job_id, workflowFailureMessage(err)).catch(() => undefined);
     throw err;
   }
 }

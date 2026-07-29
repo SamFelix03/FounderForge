@@ -48,6 +48,7 @@ async function notifyCallback(job: JobRecord): Promise<void> {
         artifacts: job.artifacts,
         cost_breakdown: job.cost_breakdown,
         error: job.error,
+        error_code: job.error_code,
         list_price_usd: job.list_price_usd,
       }),
     });

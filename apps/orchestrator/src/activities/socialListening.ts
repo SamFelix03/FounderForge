@@ -1,8 +1,9 @@
-import { heartbeat } from "@temporalio/activity";
+import { ApplicationFailure, heartbeat } from "@temporalio/activity";
 import {
   runPipeline,
   type Output,
 } from "@founderforge/social-listening-service";
+import { isProductUrlError } from "@founderforge/schemas";
 import { createLogger } from "@founderforge/observability";
 import { setJobStep } from "./jobs.js";
 
@@ -11,6 +12,7 @@ const log = createLogger("activities.socialListening");
 export async function runSocialListeningActivity(args: {
   job_id: string;
   product_url: string;
+  product_name?: string;
   live?: boolean;
   max_posts?: number;
 }): Promise<{
@@ -24,6 +26,7 @@ export async function runSocialListeningActivity(args: {
   log.info("starting social listening pipeline", {
     job_id: args.job_id,
     product_url: args.product_url,
+    product_name: args.product_name ?? null,
     max_posts: args.max_posts ?? null,
   });
 
@@ -39,6 +42,7 @@ export async function runSocialListeningActivity(args: {
     const result = await runPipeline(
       {
         product_url: args.product_url,
+        product_name: args.product_name,
         live: args.live ?? false,
         max_posts: args.max_posts,
       },
@@ -58,6 +62,11 @@ export async function runSocialListeningActivity(args: {
       recommendations_count: result.recommendations_count,
       cost_breakdown: result.cost_breakdown,
     };
+  } catch (err) {
+    if (isProductUrlError(err)) {
+      throw ApplicationFailure.nonRetryable(err.message, err.code);
+    }
+    throw err;
   } finally {
     clearInterval(heartbeatTimer);
   }

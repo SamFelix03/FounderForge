@@ -75,6 +75,12 @@ jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
   const discovery = discoveryPayload();
   const entry = discovery.services.find((s) => s.name === service);
 
+  const scrapeFirst =
+    service === "social-listening" ||
+    service === "promo-video" ||
+    service === "outreach" ||
+    service === "competitor-research";
+
   return res.status(200).json({
     ok: true,
     paid: false,
@@ -94,6 +100,12 @@ jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
         "HTTP 402 with PAYMENT-REQUIRED (x402 v2). Settle USD₮0 on eip155:196, then replay the same POST with PAYMENT-SIGNATURE.",
       paid_response:
         "HTTP 202 with job_id and status_url. Poll GET /v1/jobs/{job_id} (free) until status is completed, then download artifacts[].url.",
+      ...(scrapeFirst
+        ? {
+            scrape_failures:
+              "If status=failed after create, read error + error_code. Common scrape codes: product_url_unreachable, product_url_no_content, product_url_timeout, product_url_http_error. For social-listening, optional input.product_name continues the job when the URL cannot be scraped.",
+          }
+        : {}),
     },
     a2mcp_price_usd: manifest.a2mcp_price_usd,
     eta_seconds: manifest.sla_minutes * 60,
@@ -161,6 +173,7 @@ jobsRouter.get("/v1/jobs/:jobId", async (req, res) => {
     cost_breakdown: job.cost_breakdown,
     list_price_usd: job.list_price_usd,
     error: job.error,
+    ...(job.error_code ? { error_code: job.error_code } : {}),
     created_at: job.created_at,
     updated_at: job.updated_at,
     eta_seconds: job.eta_seconds,

@@ -90,6 +90,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
     case "social-listening": {
       const input = job.input as {
         product_url: string;
+        product_name?: string;
         live?: boolean;
         max_posts?: number;
       };
@@ -101,6 +102,7 @@ export async function dispatchJob(jobId: string): Promise<void> {
         await enqueueSocialListening({
           job_id: jobId,
           product_url: input.product_url,
+          product_name: input.product_name,
           live: input.live,
           max_posts: input.max_posts,
         });

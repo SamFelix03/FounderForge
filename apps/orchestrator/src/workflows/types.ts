@@ -44,6 +44,7 @@ export interface PromoVideoWorkflowResult {
 export interface SocialListeningWorkflowInput {
   job_id: string;
   product_url: string;
+  product_name?: string;
   live?: boolean;
   max_posts?: number;
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
   SERVICE_MANIFESTS,
+  decodeJobError,
   type CreateJobRequest,
   type JobArtifact,
   type JobRecord,
@@ -29,6 +30,7 @@ interface JobRow {
 }
 
 function rowToJob(row: JobRow): JobRecord & { step?: string } {
+  const decoded = decodeJobError(row.error);
   return {
     id: row.id,
     service: row.service,
@@ -37,7 +39,8 @@ function rowToJob(row: JobRow): JobRecord & { step?: string } {
     artifacts: row.artifacts ?? [],
     cost_breakdown: row.cost_breakdown ?? [],
     list_price_usd: Number(row.list_price_usd),
-    error: row.error ?? undefined,
+    error: decoded.error,
+    ...(decoded.error_code ? { error_code: decoded.error_code } : {}),
     callback_url: row.callback_url ?? undefined,
     idempotency_key: row.idempotency_key ?? undefined,
     eta_seconds: row.eta_seconds ?? undefined,

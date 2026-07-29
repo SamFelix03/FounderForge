@@ -9,7 +9,7 @@
     "dev": "tsx watch src/worker.ts",
     "start": "node dist/worker.js",
     "clean": "rm -rf dist",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --import tsx --test 'src/**/*.test.ts' 'src/*.test.ts'"
   },
   "dependencies": {
     "@founderforge/automated-product-demo-service": "workspace:*",

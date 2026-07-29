@@ -15,6 +15,7 @@ import {
   SocialListeningInputSchema,
   type ServiceName,
 } from "./models.js";
+import { PRODUCT_URL_ERROR_DOCS } from "./jobErrors.js";
 
 function jsonSchema(schema: Parameters<typeof zodToJsonSchema>[0], name: string): JsonSchema7Type {
   return zodToJsonSchema(schema, {
@@ -96,6 +97,10 @@ export type FounderForgeDiscoveryDocument = {
       content_type: "application/json";
       idempotency: "X-Idempotency-Key";
     };
+    failures?: {
+      summary: string;
+      product_url_error_codes: Array<{ code: string; description: string }>;
+    };
   };
   envelopes: {
     create_job_request: JsonSchema7Type;
@@ -130,7 +135,8 @@ const SERVICE_META: Record<
     title: "Product Promo Video",
     summary:
       "Creates a short promotional video for your product, ready for launch pages, social, and ads.",
-    provide: "product_url (required). Optional: duration (4–15s), resolution, max_pages.",
+    provide:
+      "product_url (required). Optional: duration (4–15s), resolution, max_pages. Unreachable or empty product pages fail with product_url_* error_code (see protocol.failures).",
     deliverable: "Downloadable MP4 promo video URL in artifacts[].url where type=video.",
     inputSchema: PromoVideoInputSchema,
     example_request: {
@@ -175,13 +181,15 @@ const SERVICE_META: Record<
     title: "Reddit Engagement Pack",
     summary:
       "Finds live Reddit threads where people want solutions like yours and drafts ready-to-post replies.",
-    provide: "product_url (required). Optional: max_posts (1–20).",
+    provide:
+      "product_url (required). Optional: product_name (fallback if the URL cannot be scraped), max_posts (1–20).",
     deliverable:
       "PDF playbook (type=pdf_report) plus thread URLs (type=reddit_thread). Primary file is artifacts[].url on pdf_report.",
     inputSchema: SocialListeningInputSchema,
     example_request: {
       input: {
         product_url: "https://example.com",
+        product_name: "Example App",
         max_posts: 5,
       },
     },
@@ -202,7 +210,8 @@ const SERVICE_META: Record<
     title: "Investor Outreach Report",
     summary:
       "Builds an investor intelligence pack from your company site and revenue data.",
-    provide: "website_url and a public spreadsheet URL (sheet_url) of revenue/metrics.",
+    provide:
+      "website_url and a public spreadsheet URL (sheet_url) of revenue/metrics. Website scrape failures surface as product_url_* error_code on poll.",
     deliverable: "Investor PDF in artifacts[].url where type=pdf_report.",
     inputSchema: OutreachInputSchema,
     example_request: {
@@ -223,7 +232,8 @@ const SERVICE_META: Record<
     title: "Competitor Research Report",
     summary:
       "Delivers competitive analysis covering peers, features, pricing, SWOT, and positioning.",
-    provide: "product_name (required). Optional: product_url.",
+    provide:
+      "product_name (required). Optional: product_url (enrichment). If product_url cannot be scraped and search yields no candidates, fails with product_url_no_content.",
     deliverable: "Competitor report PDF in artifacts[].url where type=report_pdf.",
     inputSchema: CompetitorResearchInputSchema,
     example_request: {
@@ -384,6 +394,11 @@ export function buildDiscoveryDocument(opts?: {
         content_type: "application/json",
         idempotency: "X-Idempotency-Key",
       },
+      failures: {
+        summary:
+          "When status=failed, read error (human) and optional error_code (machine). Scrape-first services encode product URL failures as [code] message.",
+        product_url_error_codes: PRODUCT_URL_ERROR_DOCS,
+      },
     },
     envelopes: {
       create_job_request: jsonSchema(CreateJobRequestSchema, "create_job_request"),
@@ -437,7 +452,7 @@ export function buildDiscoveryDocument(opts?: {
         path_url: `${baseUrl}/v1/jobs/{job_id}`,
         paid: false,
         description:
-          "Poll job status. When completed, artifacts[].url is the deliverable.",
+          "Poll job status. When completed, artifacts[].url is the deliverable. On failed, read error + optional error_code (e.g. product_url_no_content).",
       },
       {
         method: "GET",
@@ -445,7 +460,7 @@ export function buildDiscoveryDocument(opts?: {
         path_url: `${baseUrl}/v1/services/{service}/jobs`,
         paid: false,
         description:
-          "Free usage guide on each paid job URL (does not create a job). Explains POST + x402 + poll. Schemas live at /v1/discovery.",
+          "Free usage guide on each paid job URL (does not create a job). Explains POST + x402 + poll. Schemas live at /v1/discovery. Mentions product URL scrape failure codes for scrape-first services.",
       },
     ],
     services,

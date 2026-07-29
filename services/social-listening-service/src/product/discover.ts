@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { ProductUrlError } from "@founderforge/schemas";
 import { parseProductConfig, envInt, envOr } from "../config.js";
 import { completeJson } from "../llm/groq.js";
 import { createLogger } from "../log.js";
@@ -10,16 +11,21 @@ const log = createLogger("product.discover");
 
 function normalizeUrl(input: string): string {
   const trimmed = input.trim();
-  if (!trimmed) throw new Error("Website URL is required");
+  if (!trimmed) {
+    throw new ProductUrlError("product_url_invalid", "Website URL is required");
+  }
   const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   let u: URL;
   try {
     u = new URL(withProto);
   } catch {
-    throw new Error(`Invalid website URL: ${input}`);
+    throw new ProductUrlError("product_url_invalid", `Invalid website URL: ${input}`);
   }
   if (!["http:", "https:"].includes(u.protocol)) {
-    throw new Error(`Invalid website URL protocol: ${input}`);
+    throw new ProductUrlError(
+      "product_url_invalid",
+      `Invalid website URL protocol: ${input}`,
+    );
   }
   return u.toString();
 }
