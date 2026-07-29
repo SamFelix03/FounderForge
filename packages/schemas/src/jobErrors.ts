@@ -1,5 +1,5 @@
 /**
- * Stable job failure codes for URL scrape / product-discovery failures.
+ * Stable job failure codes for scrape / discovery / empty-deliverable failures.
  * Encoded into `jobs.error` as `[code] human message` so Temporal boundaries
  * and existing TEXT columns keep working without a required schema migration.
  */
@@ -12,20 +12,47 @@ export const PRODUCT_URL_ERROR_CODES = [
   "product_url_no_content",
 ] as const;
 
+export const SOCIAL_LISTENING_ERROR_CODES = [
+  "reddit_ingest_failed",
+  "reddit_no_threads",
+  "reddit_no_drafts",
+] as const;
+
 export type ProductUrlErrorCode = (typeof PRODUCT_URL_ERROR_CODES)[number];
+export type SocialListeningErrorCode = (typeof SOCIAL_LISTENING_ERROR_CODES)[number];
+export type JobErrorCode = ProductUrlErrorCode | SocialListeningErrorCode;
 
-const CODE_SET = new Set<string>(PRODUCT_URL_ERROR_CODES);
+const CODE_SET = new Set<string>([
+  ...PRODUCT_URL_ERROR_CODES,
+  ...SOCIAL_LISTENING_ERROR_CODES,
+]);
 
-export class ProductUrlError extends Error {
-  readonly code: ProductUrlErrorCode;
+/** Any known encoded job failure (scrape, empty Reddit pack, etc.). */
+export class CodedJobError extends Error {
+  readonly code: JobErrorCode;
 
-  constructor(code: ProductUrlErrorCode, message: string, options?: { cause?: unknown }) {
+  constructor(code: JobErrorCode, message: string, options?: { cause?: unknown }) {
     super(encodeJobError(code, message));
-    this.name = "ProductUrlError";
+    this.name = "CodedJobError";
     this.code = code;
     if (options?.cause !== undefined) {
       (this as Error & { cause?: unknown }).cause = options.cause;
     }
+  }
+}
+
+export function isCodedJobError(err: unknown): err is CodedJobError {
+  return err instanceof CodedJobError;
+}
+
+export class ProductUrlError extends CodedJobError {
+  constructor(
+    code: ProductUrlErrorCode,
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(code, message, options);
+    this.name = "ProductUrlError";
   }
 }
 
@@ -123,5 +150,25 @@ export const PRODUCT_URL_ERROR_DOCS: Array<{
     code: "product_url_no_content",
     description:
       "Page loaded but no usable product text (empty SPA shell, bot wall, or <200 chars).",
+  },
+];
+
+export const SOCIAL_LISTENING_ERROR_DOCS: Array<{
+  code: SocialListeningErrorCode;
+  description: string;
+}> = [
+  {
+    code: "reddit_ingest_failed",
+    description: "Reddit thread discovery (Tavily/research) threw before returning hits.",
+  },
+  {
+    code: "reddit_no_threads",
+    description:
+      "Discovery returned zero matching Reddit threads for this product — no comments to draft.",
+  },
+  {
+    code: "reddit_no_drafts",
+    description:
+      "Threads were found but none passed drafting/compliance; deliverable would be empty.",
   },
 ];

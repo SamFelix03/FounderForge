@@ -254,7 +254,7 @@ Job lifecycle:
 | `completed` | Artifacts ready |
 | `failed` | See `error` and optional `error_code` (e.g. `product_url_no_content`) |
 
-Scrape-first services (`social-listening`, `promo-video`, `outreach`, and competitor research when URL scrape + search both fail) encode failures as `[error_code] human message`. Poll responses decode that into separate `error` + `error_code` fields. For social-listening, optional `input.product_name` lets the job continue when the URL cannot be scraped.
+Scrape-first services (`social-listening`, `promo-video`, `outreach`, and competitor research when URL scrape + search both fail) encode failures as `[error_code] human message`. Poll responses decode that into separate `error` + `error_code` fields. For social-listening, optional `input.product_name` lets the job continue when the URL cannot be scraped. Social-listening also fails with `reddit_no_threads` / `reddit_no_drafts` instead of completing with an empty PDF.
 
 `GET /v1/jobs/:id` does **not** require payment.
 

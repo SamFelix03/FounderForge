@@ -3,16 +3,13 @@ import assert from "node:assert/strict";
 import { workflowFailureMessage } from "./failureMessage.js";
 
 describe("workflowFailureMessage", () => {
-  it("prefers encoded product_url errors nested under Activity wrappers", () => {
+  it("prefers encoded reddit errors nested under Activity wrappers", () => {
     const root = new Error(
-      "[product_url_no_content] Could not extract readable product content from https://trackly.app",
+      "[reddit_no_threads] No matching Reddit threads found for trackly.app",
     );
-    const mid = new Error("Application failure");
-    (mid as Error & { cause?: unknown }).cause = root;
     const outer = new Error("Activity task failed");
-    (outer as Error & { cause?: unknown }).cause = mid;
-
-    assert.match(workflowFailureMessage(outer), /^\[product_url_no_content\]/);
+    (outer as Error & { cause?: unknown }).cause = root;
+    assert.match(workflowFailureMessage(outer), /^\[reddit_no_threads\]/);
   });
 
   it("rebuilds encoding from ApplicationFailure type when needed", () => {

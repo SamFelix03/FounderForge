@@ -28,9 +28,15 @@ describe("buildDiscoveryDocument", () => {
       ),
     );
     assert.ok(doc.protocol.failures?.product_url_error_codes?.length);
+    assert.ok(doc.protocol.failures?.social_listening_error_codes?.length);
     assert.ok(
       doc.protocol.failures?.product_url_error_codes.some(
         (c) => c.code === "product_url_no_content",
+      ),
+    );
+    assert.ok(
+      doc.protocol.failures?.social_listening_error_codes?.some(
+        (c) => c.code === "reddit_no_threads",
       ),
     );
     const social = doc.services.find((s) => s.name === "social-listening");

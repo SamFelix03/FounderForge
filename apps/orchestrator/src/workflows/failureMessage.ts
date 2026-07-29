@@ -30,7 +30,7 @@ export function workflowFailureMessage(err: unknown): string {
     break;
   }
 
-  const encoded = parts.find((p) => /^\[product_url_[a-z0-9_]+\]/i.test(p));
+  const encoded = parts.find((p) => /^\[[a-z0-9_]+\]/i.test(p));
   if (encoded) return encoded;
 
   const useful = parts.find(

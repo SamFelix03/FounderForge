@@ -19,6 +19,14 @@ describe("jobErrors", () => {
     assert.match(decoded.error ?? "", /trackly\.app/);
   });
 
+  it("decodes social-listening empty-pack codes", () => {
+    const decoded = decodeJobError(
+      "[reddit_no_threads] No matching Reddit threads found for trackly.app",
+    );
+    assert.equal(decoded.error_code, "reddit_no_threads");
+    assert.match(decoded.error ?? "", /No matching Reddit/);
+  });
+
   it("leaves plain errors undecoded", () => {
     assert.deepEqual(decodeJobError("Activity task failed"), {
       error: "Activity task failed",

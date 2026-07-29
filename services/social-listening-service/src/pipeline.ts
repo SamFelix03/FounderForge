@@ -92,11 +92,13 @@ export async function runPipeline(
     operation: "discover_product",
     amount_usd: 0.02,
   });
-  costs.push({
-    vendor: "llm",
-    operation: "draft",
-    amount_usd: 0.05 * Math.max(1, result.n),
-  });
+  if (result.n > 0) {
+    costs.push({
+      vendor: "llm",
+      operation: "draft",
+      amount_usd: 0.05 * result.n,
+    });
+  }
   costs.push({
     vendor: "tavily",
     operation: "reddit_research",

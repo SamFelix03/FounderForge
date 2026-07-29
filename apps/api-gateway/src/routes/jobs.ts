@@ -103,7 +103,7 @@ jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
       ...(scrapeFirst
         ? {
             scrape_failures:
-              "If status=failed after create, read error + error_code. Common scrape codes: product_url_unreachable, product_url_no_content, product_url_timeout, product_url_http_error. For social-listening, optional input.product_name continues the job when the URL cannot be scraped.",
+              "If status=failed after create, read error + error_code. Scrape codes: product_url_*. Social-listening also uses reddit_no_threads / reddit_no_drafts / reddit_ingest_failed when no usable comments can be produced (jobs do not complete with an empty PDF). Optional input.product_name continues when the URL cannot be scraped.",
           }
         : {}),
     },

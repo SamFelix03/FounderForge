@@ -7,6 +7,7 @@ import { createLogger } from "../log.js";
 import { discoverProductFromUrl } from "../product/discover.js";
 import { compileRedditReport } from "../report/compileReport.js";
 import { formatInterval } from "../schedule/spread24h.js";
+import { CodedJobError } from "@founderforge/schemas";
 import type {
   DraftCandidate,
   NormalizedEvent,
@@ -76,16 +77,37 @@ export async function runPlanCycle(opts: {
   log.info("reddit ingest", { provider: "tavily", subs: product.subreddits });
 
   await phase("discover_threads");
-  const events = await ingestReddit(product).catch((err) => {
-    log.warn("reddit ingest error", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return [] as NormalizedEvent[];
-  });
+  let events: NormalizedEvent[];
+  try {
+    events = await ingestReddit(product);
+  } catch (err) {
+    throw new CodedJobError(
+      "reddit_ingest_failed",
+      `Reddit thread discovery failed for "${product.product_name}". ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      { cause: err },
+    );
+  }
+
+  if (!events.length) {
+    throw new CodedJobError(
+      "reddit_no_threads",
+      `No matching Reddit threads found for "${product.product_name}". Product page was readable, but research returned zero engagement targets. Try a clearer product_name, a more specific product_url, or a product with an active discussion niche.`,
+    );
+  }
+
   const threads = events
     .filter((e) => e.external_id.startsWith("post_") || !e.parent_id)
     .slice(0, maxN);
   log.info("ingested threads", { total: events.length, using: threads.length });
+
+  if (!threads.length) {
+    throw new CodedJobError(
+      "reddit_no_threads",
+      `Reddit research returned hits for "${product.product_name}" but none were usable post threads.`,
+    );
+  }
 
   await phase("draft");
   const ready: DraftCandidate[] = [];
@@ -184,6 +206,18 @@ export async function runPlanCycle(opts: {
   const N = ready.length;
   const intervalLabel = formatInterval(product.window_hours, N);
   log.info("funnel", funnel);
+
+  if (N === 0) {
+    const reasons = [
+      ...new Set(skipped.map((s) => s.skipReason).filter(Boolean) as string[]),
+    ].slice(0, 5);
+    throw new CodedJobError(
+      "reddit_no_drafts",
+      `Found ${threads.length} Reddit thread(s) for "${product.product_name}" but none produced a usable suggested comment.${
+        reasons.length ? ` Skip reasons: ${reasons.join("; ")}.` : ""
+      }`,
+    );
+  }
 
   const recommendations: PlanRecommendation[] = [
     ...ready.map((c) => ({

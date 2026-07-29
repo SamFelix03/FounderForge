@@ -15,7 +15,7 @@ import {
   SocialListeningInputSchema,
   type ServiceName,
 } from "./models.js";
-import { PRODUCT_URL_ERROR_DOCS } from "./jobErrors.js";
+import { PRODUCT_URL_ERROR_DOCS, SOCIAL_LISTENING_ERROR_DOCS } from "./jobErrors.js";
 
 function jsonSchema(schema: Parameters<typeof zodToJsonSchema>[0], name: string): JsonSchema7Type {
   return zodToJsonSchema(schema, {
@@ -100,6 +100,7 @@ export type FounderForgeDiscoveryDocument = {
     failures?: {
       summary: string;
       product_url_error_codes: Array<{ code: string; description: string }>;
+      social_listening_error_codes?: Array<{ code: string; description: string }>;
     };
   };
   envelopes: {
@@ -182,7 +183,7 @@ const SERVICE_META: Record<
     summary:
       "Finds live Reddit threads where people want solutions like yours and drafts ready-to-post replies.",
     provide:
-      "product_url (required). Optional: product_name (fallback if the URL cannot be scraped), max_posts (1–20).",
+      "product_url (required). Optional: product_name (fallback if the URL cannot be scraped), max_posts (1–20). Jobs fail with reddit_no_threads / reddit_no_drafts when no usable comments can be produced (no empty PDF).",
     deliverable:
       "PDF playbook (type=pdf_report) plus thread URLs (type=reddit_thread). Primary file is artifacts[].url on pdf_report.",
     inputSchema: SocialListeningInputSchema,
@@ -396,8 +397,9 @@ export function buildDiscoveryDocument(opts?: {
       },
       failures: {
         summary:
-          "When status=failed, read error (human) and optional error_code (machine). Scrape-first services encode product URL failures as [code] message.",
+          "When status=failed, read error (human) and optional error_code (machine). Failures are encoded as [code] message. Empty social-listening packs fail (no blank PDF).",
         product_url_error_codes: PRODUCT_URL_ERROR_DOCS,
+        social_listening_error_codes: SOCIAL_LISTENING_ERROR_DOCS,
       },
     },
     envelopes: {

@@ -3,7 +3,7 @@ import {
   runPipeline,
   type Output,
 } from "@founderforge/social-listening-service";
-import { isProductUrlError } from "@founderforge/schemas";
+import { isCodedJobError } from "@founderforge/schemas";
 import { createLogger } from "@founderforge/observability";
 import { setJobStep } from "./jobs.js";
 
@@ -63,7 +63,7 @@ export async function runSocialListeningActivity(args: {
       cost_breakdown: result.cost_breakdown,
     };
   } catch (err) {
-    if (isProductUrlError(err)) {
+    if (isCodedJobError(err)) {
       throw ApplicationFailure.nonRetryable(err.message, err.code);
     }
     throw err;
