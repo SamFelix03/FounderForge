@@ -4,6 +4,7 @@ import {
   buildPaidRoutesConfig,
   createOkxPaymentProtection,
   loadPaymentEnv,
+  paidResourceUrl,
   priceUsdString,
 } from "./index.js";
 
@@ -17,19 +18,34 @@ describe("payments-okx", () => {
     const routes = buildPaidRoutesConfig(
       "0x0000000000000000000000000000000000000001",
       "eip155:1952",
+      { PUBLIC_API_BASE_URL: "https://founderforge-api-production.up.railway.app" },
     );
     assert.equal(typeof routes, "object");
-    const route = (routes as Record<string, { accepts: { scheme: string; price: string; network: string } }>)[
-      "POST /v1/services/competitor-research/jobs"
-    ];
+    const route = (routes as Record<
+      string,
+      { accepts: { scheme: string; price: string; network: string }; resource: string }
+    >)["POST /v1/services/competitor-research/jobs"];
     assert.ok(route);
     assert.equal(route.accepts.scheme, "exact");
     assert.equal(route.accepts.price, "$1.00");
     assert.equal(route.accepts.network, "eip155:1952");
+    assert.equal(
+      route.resource,
+      "https://founderforge-api-production.up.railway.app/v1/services/competitor-research/jobs",
+    );
     assert.equal(Object.keys(routes as object).length, 6);
     assert.equal(
       (routes as Record<string, unknown>)["POST /v1/services/social-post/jobs"],
       undefined,
+    );
+  });
+
+  it("coerces public http resource URLs to https", () => {
+    assert.equal(
+      paidResourceUrl("/v1/services/brand-kit/jobs", {
+        PUBLIC_API_BASE_URL: "http://founderforge-api-production.up.railway.app",
+      }),
+      "https://founderforge-api-production.up.railway.app/v1/services/brand-kit/jobs",
     );
   });
 

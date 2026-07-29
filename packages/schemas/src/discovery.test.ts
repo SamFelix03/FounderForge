@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildDiscoveryDocument } from "./discovery.js";
+import { buildDiscoveryDocument, defaultPublicBaseUrl } from "./discovery.js";
 
 describe("buildDiscoveryDocument", () => {
   it("includes six paid services and Pattern A protocol", () => {
@@ -22,5 +22,19 @@ describe("buildDiscoveryDocument", () => {
     );
     assert.ok(doc.envelopes.create_job_request);
     assert.equal(doc.protocol.polling.result_url_field, "artifacts[].url");
+    assert.ok(
+      doc.free_endpoints.some(
+        (e) => e.path === "/v1/discovery" && e.method === "POST",
+      ),
+    );
+  });
+
+  it("coerces public http base URLs to https", () => {
+    assert.equal(
+      defaultPublicBaseUrl({
+        PUBLIC_API_BASE_URL: "http://founderforge-api-production.up.railway.app/",
+      }),
+      "https://founderforge-api-production.up.railway.app",
+    );
   });
 });

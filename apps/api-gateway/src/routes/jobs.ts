@@ -1,4 +1,9 @@
-import { Router, type Router as ExpressRouter } from "express";
+import {
+  Router,
+  type Request,
+  type Response,
+  type Router as ExpressRouter,
+} from "express";
 import {
   AutomatedProductDemoInputSchema,
   BrandKitInputSchema,
@@ -122,13 +127,16 @@ jobsRouter.get("/v1/jobs/:jobId", async (req, res) => {
 
 /**
  * Free A2MCP discovery catalog — protocol, JSON Schemas, examples, artifact rules.
- * Not registered in OKX payment routes (GET-only / unpaid).
+ * Not registered in OKX payment routes (unpaid). Accept GET and POST: marketplace
+ * reviewers often POST free listed endpoints and expect 200 + the catalog body.
  */
-jobsRouter.get("/v1/discovery", (_req, res) => {
-  res.json(discoveryPayload());
-});
+function sendDiscovery(_req: Request, res: Response) {
+  res.status(200).json(discoveryPayload());
+}
+
+jobsRouter.get("/v1/discovery", sendDiscovery);
+jobsRouter.post("/v1/discovery", sendDiscovery);
 
 /** Alias of /v1/discovery for callers that already probe the services catalog. */
-jobsRouter.get("/v1/services", (_req, res) => {
-  res.json(discoveryPayload());
-});
+jobsRouter.get("/v1/services", sendDiscovery);
+jobsRouter.post("/v1/services", sendDiscovery);

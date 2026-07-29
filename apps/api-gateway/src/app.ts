@@ -48,6 +48,9 @@ export async function createAppWithPayments(
   }
 
   const app = express();
+  // Railway (and most PaaS) terminate TLS at the proxy. Without this, Express
+  // sees plain HTTP and the OKX x402 middleware embeds http:// in PAYMENT-REQUIRED.
+  app.set("trust proxy", 1);
   app.use(express.json({ limit: "1mb" }));
   app.use(idempotencyMiddleware);
 

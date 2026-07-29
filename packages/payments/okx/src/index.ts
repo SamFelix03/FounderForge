@@ -8,13 +8,34 @@ import {
   type Network,
 } from "@okxweb3/x402-express";
 import { ExactEvmScheme } from "@okxweb3/x402-evm/exact/server";
-import { SERVICE_MANIFESTS, type ServiceName } from "@founderforge/schemas";
+import {
+  defaultPublicBaseUrl,
+  SERVICE_MANIFESTS,
+  type ServiceName,
+} from "@founderforge/schemas";
 import { createLogger } from "@founderforge/observability";
 
 const log = createLogger("payments-okx");
 
 const EVM_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 const SUPPORTED_NETWORKS = new Set<Network>(["eip155:196", "eip155:1952"]);
+const LOCAL_HTTP_BASE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+
+/**
+ * Absolute URL for x402 `resource.url`. Public hosts must be https:// even when
+ * Express sees http behind a TLS-terminating proxy.
+ */
+export function paidResourceUrl(
+  endpointPath: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  let base = defaultPublicBaseUrl(env);
+  if (!LOCAL_HTTP_BASE.test(base)) {
+    base = base.replace(/^http:\/\//i, "https://");
+  }
+  const path = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+  return `${base}${path}`;
+}
 
 export type XLayerNetwork = "eip155:196" | "eip155:1952";
 
@@ -65,7 +86,11 @@ export function priceUsdString(service: ServiceName): string {
   return `$${SERVICE_MANIFESTS[service].a2mcp_price_usd.toFixed(2)}`;
 }
 
-export function buildPaidRoutesConfig(payTo: string, network: XLayerNetwork): RoutesConfig {
+export function buildPaidRoutesConfig(
+  payTo: string,
+  network: XLayerNetwork,
+  env: NodeJS.ProcessEnv = process.env,
+): RoutesConfig {
   const routes: RoutesConfig = {};
 
   for (const manifest of Object.values(SERVICE_MANIFESTS)) {
@@ -78,6 +103,8 @@ export function buildPaidRoutesConfig(payTo: string, network: XLayerNetwork): Ro
         price: `$${manifest.a2mcp_price_usd.toFixed(2)}`,
         maxTimeoutSeconds: 600,
       },
+      // Pin https public URL so challenges never use the internal http proxy hop.
+      resource: paidResourceUrl(manifest.endpoint_path, env),
       description: `A2MCP job create for ${manifest.name}`,
       mimeType: "application/json",
     };

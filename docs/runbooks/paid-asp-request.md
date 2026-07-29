@@ -98,7 +98,7 @@ Decoded challenge shape (example):
   "x402Version": 2,
   "error": "Payment required",
   "resource": {
-    "url": "http://founderforge-api-production.up.railway.app/v1/services/social-listening/jobs",
+    "url": "https://founderforge-api-production.up.railway.app/v1/services/social-listening/jobs",
     "description": "A2MCP job create for social-listening",
     "mimeType": "application/json"
   },

@@ -105,7 +105,7 @@ export type FounderForgeDiscoveryDocument = {
     job_statuses: JsonSchema7Type;
   };
   free_endpoints: Array<{
-    method: "GET";
+    method: "GET" | "POST";
     path: string;
     path_url?: string;
     paid: false;
@@ -266,11 +266,16 @@ const SERVICE_META: Record<
 };
 
 export function defaultPublicBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
-  const raw =
+  let raw =
     env.PUBLIC_API_BASE_URL?.trim() ||
     env.API_PUBLIC_URL?.trim() ||
     "https://founderforge-api-production.up.railway.app";
-  return raw.replace(/\/+$/, "");
+  raw = raw.replace(/\/+$/, "");
+  // Public PaaS URLs must be https in discovery + x402 challenges (TLS terminates at proxy).
+  if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(raw)) {
+    raw = raw.replace(/^http:\/\//i, "https://");
+  }
+  return raw;
 }
 
 export function buildDiscoveryDocument(opts?: {
@@ -330,7 +335,7 @@ export function buildDiscoveryDocument(opts?: {
           step: 1,
           action: "Read this discovery document",
           detail:
-            "GET /v1/discovery (free). Pick a paid service, copy endpoint_url, and build the create body from input_schema + example_request.",
+            "GET or POST /v1/discovery (free). Pick a paid service, copy endpoint_url, and build the create body from input_schema + example_request.",
         },
         {
           step: 2,
@@ -401,7 +406,15 @@ export function buildDiscoveryDocument(opts?: {
         path_url: `${baseUrl}/v1/discovery`,
         paid: false,
         description:
-          "This document — full A2MCP protocol, JSON Schemas, examples, and artifact rules.",
+          "This document — full A2MCP protocol, JSON Schemas, examples, and artifact rules. Also accepts POST with the same 200 body.",
+      },
+      {
+        method: "POST",
+        path: "/v1/discovery",
+        path_url: `${baseUrl}/v1/discovery`,
+        paid: false,
+        description:
+          "Same discovery document as GET (marketplace free-endpoint probes often POST).",
       },
       {
         method: "GET",
@@ -409,7 +422,14 @@ export function buildDiscoveryDocument(opts?: {
         path_url: `${baseUrl}/v1/services`,
         paid: false,
         description:
-          "Same discovery document (alias). Prefer /v1/discovery for new callers.",
+          "Same discovery document (alias). Prefer /v1/discovery for new callers. Also accepts POST.",
+      },
+      {
+        method: "POST",
+        path: "/v1/services",
+        path_url: `${baseUrl}/v1/services`,
+        paid: false,
+        description: "Same discovery document as GET /v1/services.",
       },
       {
         method: "GET",

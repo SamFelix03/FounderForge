@@ -102,6 +102,17 @@ describe("api-gateway", { skip: !hasDb }, () => {
     assert.equal(brand.example_artifacts[0].type, "brand_kit_zip");
   });
 
+  it("serves discovery catalog on POST (marketplace free-endpoint probes)", async () => {
+    const discovery = await request(app).post("/v1/discovery").send({});
+    assert.equal(discovery.status, 200);
+    assert.equal(discovery.body.schema_version, "1.0.0");
+    assert.equal(discovery.body.services.length, 6);
+
+    const services = await request(app).post("/v1/services").send({});
+    assert.equal(services.status, 200);
+    assert.equal(services.body.schema_version, "1.0.0");
+  });
+
   it("rejects unknown service", async () => {
     const res = await request(app)
       .post("/v1/services/not-a-service/jobs")
