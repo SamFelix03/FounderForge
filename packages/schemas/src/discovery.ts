@@ -439,6 +439,14 @@ export function buildDiscoveryDocument(opts?: {
         description:
           "Poll job status. When completed, artifacts[].url is the deliverable.",
       },
+      {
+        method: "GET",
+        path: "/v1/services/{service}/jobs",
+        path_url: `${baseUrl}/v1/services/{service}/jobs`,
+        paid: false,
+        description:
+          "Free usage guide on each paid job URL (does not create a job). Explains POST + x402 + poll. Schemas live at /v1/discovery.",
+      },
     ],
     services,
   };

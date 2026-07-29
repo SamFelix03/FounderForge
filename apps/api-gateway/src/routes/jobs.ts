@@ -59,6 +59,49 @@ jobsRouter.get("/health", (_req, res) => {
   });
 });
 
+/**
+ * Free usage probe on paid job URLs. Marketplace validators often GET the listed
+ * endpoint; never create a job here — guide callers to POST + discovery.
+ * Not registered in OKX payment routes (unpaid 200).
+ */
+jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
+  const parsedService = ServiceNameSchema.safeParse(req.params.service);
+  if (!parsedService.success) {
+    return res.status(404).json({ error: "unknown_service", service: req.params.service });
+  }
+  const service = parsedService.data;
+  const manifest = SERVICE_MANIFESTS[service];
+  const baseUrl = defaultPublicBaseUrl();
+  const discovery = discoveryPayload();
+  const entry = discovery.services.find((s) => s.name === service);
+
+  return res.status(200).json({
+    ok: true,
+    paid: false,
+    probe: "usage",
+    service,
+    endpoint_path: manifest.endpoint_path,
+    endpoint_url: `${baseUrl}${manifest.endpoint_path}`,
+    message:
+      "This URL creates jobs via POST only. GET is a free usage guide for validators and agents.",
+    how_to_call: {
+      method: "POST",
+      path: manifest.endpoint_path,
+      url: `${baseUrl}${manifest.endpoint_path}`,
+      content_type: "application/json",
+      body_shape: { input: "object — see discovery input_schema / example_request" },
+      unpaid_response:
+        "HTTP 402 with PAYMENT-REQUIRED (x402 v2). Settle USD₮0 on eip155:196, then replay the same POST with PAYMENT-SIGNATURE.",
+      paid_response:
+        "HTTP 202 with job_id and status_url. Poll GET /v1/jobs/{job_id} (free) until status is completed, then download artifacts[].url.",
+    },
+    a2mcp_price_usd: manifest.a2mcp_price_usd,
+    eta_seconds: manifest.sla_minutes * 60,
+    discovery_url: `${baseUrl}/v1/discovery`,
+    example_request: entry?.example_request ?? { input: {} },
+  });
+});
+
 jobsRouter.post("/v1/services/:service/jobs", async (req, res) => {
   const parsedService = ServiceNameSchema.safeParse(req.params.service);
   if (!parsedService.success) {
