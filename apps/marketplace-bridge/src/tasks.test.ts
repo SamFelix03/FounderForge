@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import {
   extractUrls,
   inferServiceFromText,
+  isAcceptedMarketplaceTask,
   isAcceptedX402Task,
   parseActiveTasks,
 } from "./tasks.js";
 import { buildDeliverableText } from "./bridge.js";
 
 describe("marketplace-bridge tasks", () => {
-  it("parses nested providerTasks and filters accepted x402", () => {
+  it("parses nested providerTasks and keeps accepted x402 + escrow", () => {
     const payload = {
       data: {
         providerTasks: [
@@ -22,6 +23,14 @@ describe("marketplace-bridge tasks", () => {
             description: "Run social-listening for https://linear.app",
           },
           {
+            jobId: "okx-escrow",
+            status: 1,
+            paymentMode: 1,
+            myRole: "asp",
+            agentId: "9733",
+            description: "Escrow Reddit pack for https://notion.so",
+          },
+          {
             jobId: "okx-2",
             status: "submitted",
             paymentMode: 3,
@@ -31,11 +40,18 @@ describe("marketplace-bridge tasks", () => {
         ],
       },
     };
-    const tasks = parseActiveTasks(payload, "9733").filter(isAcceptedX402Task);
-    assert.equal(tasks.length, 1);
-    assert.equal(tasks[0]?.jobId, "okx-1");
-    assert.deepEqual(extractUrls(tasks[0]!.description!), ["https://linear.app"]);
-    assert.equal(inferServiceFromText(tasks[0]!.description!), "social-listening");
+    const all = parseActiveTasks(payload, "9733");
+    const tracked = all.filter(isAcceptedMarketplaceTask);
+    assert.equal(tracked.length, 2);
+    assert.deepEqual(
+      tracked.map((t) => t.jobId).sort(),
+      ["okx-1", "okx-escrow"],
+    );
+    const x402Only = all.filter(isAcceptedX402Task);
+    assert.equal(x402Only.length, 1);
+    assert.equal(x402Only[0]?.jobId, "okx-1");
+    assert.deepEqual(extractUrls(tracked[0]!.description!), ["https://linear.app"]);
+    assert.equal(inferServiceFromText(tracked[0]!.description!), "social-listening");
   });
 
   it("builds failure deliverable text with error_code", () => {

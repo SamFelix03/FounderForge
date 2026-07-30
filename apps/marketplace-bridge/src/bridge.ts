@@ -10,7 +10,7 @@ import { isWalletReady, runOnchainOs, tryParseJson } from "./onchainos.js";
 import {
   extractUrls,
   inferServiceFromText,
-  isAcceptedX402Task,
+  isAcceptedMarketplaceTask,
   isEscrowPaymentMode,
   isX402PaymentMode,
   parseActiveTasks,
@@ -117,7 +117,7 @@ export class MarketplaceBridge {
     for (const t of results) {
       if (!byId.has(t.jobId)) byId.set(t.jobId, t);
     }
-    return [...byId.values()].filter(isAcceptedX402Task);
+    return [...byId.values()].filter(isAcceptedMarketplaceTask);
   }
 
   private async handleTask(task: OkxActiveTask): Promise<void> {

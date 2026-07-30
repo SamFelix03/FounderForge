@@ -138,7 +138,8 @@ export function parseActiveTasks(payload: unknown, aspAgentId: string): OkxActiv
   return out;
 }
 
-export function isAcceptedX402Task(task: OkxActiveTask): boolean {
+/** Accepted marketplace tasks the bridge should track (x402 + escrow). */
+export function isAcceptedMarketplaceTask(task: OkxActiveTask): boolean {
   const status = task.status;
   const statusOk =
     status === 1 ||
@@ -148,11 +149,12 @@ export function isAcceptedX402Task(task: OkxActiveTask): boolean {
 
   const mode = task.paymentMode;
   if (mode === undefined || mode === null || mode === "") return true; // unknown → try correlate
-  return (
-    mode === 3 ||
-    mode === "3" ||
-    (typeof mode === "string" && /x402/i.test(mode))
-  );
+  return isX402PaymentMode(task) || isEscrowPaymentMode(task);
+}
+
+/** @deprecated Prefer isAcceptedMarketplaceTask — kept for existing imports/tests. */
+export function isAcceptedX402Task(task: OkxActiveTask): boolean {
+  return isAcceptedMarketplaceTask(task) && !isEscrowPaymentMode(task);
 }
 
 /** Escrow (1) supports ASP deliver/submit. x402 (3) does not — buyer completes after poll. */
