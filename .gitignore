@@ -3,6 +3,7 @@ dist/
 .turbo/
 .env
 .env.local
+.pnpm-store/
 *.log
 .DS_Store
 coverage/

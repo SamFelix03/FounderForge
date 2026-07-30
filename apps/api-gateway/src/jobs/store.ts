@@ -18,12 +18,27 @@ export {
   resetPoolForTests,
 };
 
+type JobStoreFacade = {
+  create: PostgresJobStore["create"];
+  get: PostgresJobStore["get"];
+  update: PostgresJobStore["update"];
+  setStatus: PostgresJobStore["setStatus"];
+  markDispatched: PostgresJobStore["markDispatched"];
+  markDispatchFailed: PostgresJobStore["markDispatchFailed"];
+  listStaleQueued: PostgresJobStore["listStaleQueued"];
+  oldestQueuedAgeSeconds: PostgresJobStore["oldestQueuedAgeSeconds"];
+  list: PostgresJobStore["list"];
+};
+
 /** Default store singleton used by routes. */
-export const jobStore = {
-  create: (...args: Parameters<PostgresJobStore["create"]>) => getJobStore().create(...args),
-  get: (...args: Parameters<PostgresJobStore["get"]>) => getJobStore().get(...args),
-  update: (...args: Parameters<PostgresJobStore["update"]>) => getJobStore().update(...args),
-  setStatus: (...args: Parameters<PostgresJobStore["setStatus"]>) =>
-    getJobStore().setStatus(...args),
+export const jobStore: JobStoreFacade = {
+  create: (...args) => getJobStore().create(...args),
+  get: (...args) => getJobStore().get(...args),
+  update: (...args) => getJobStore().update(...args),
+  setStatus: (...args) => getJobStore().setStatus(...args),
+  markDispatched: (...args) => getJobStore().markDispatched(...args),
+  markDispatchFailed: (...args) => getJobStore().markDispatchFailed(...args),
+  listStaleQueued: (...args) => getJobStore().listStaleQueued(...args),
+  oldestQueuedAgeSeconds: (...args) => getJobStore().oldestQueuedAgeSeconds(...args),
   list: () => getJobStore().list(),
 };

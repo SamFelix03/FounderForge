@@ -21,6 +21,12 @@ import {
 import { createLogger } from "@founderforge/observability";
 import { jobStore } from "../jobs/store.js";
 import { dispatchJob } from "../jobs/dispatch.js";
+import {
+  extractMarketplaceIds,
+  normalizeCreateJobBody,
+  POLL_CONTRACT,
+} from "../jobs/normalizeBody.js";
+import { probeTemporal } from "../temporal/health.js";
 
 const log = createLogger("routes.jobs");
 
@@ -49,13 +55,36 @@ function validateServiceInput(service: ServiceName, input: Record<string, unknow
   }
 }
 
+function pollHints(jobId: string) {
+  return {
+    poll: {
+      method: POLL_CONTRACT.method,
+      path: `/v1/jobs/${jobId}`,
+      recommended_interval_seconds: POLL_CONTRACT.recommended_interval_seconds,
+      terminal_statuses: [...POLL_CONTRACT.terminal_statuses],
+      success_status: POLL_CONTRACT.success_status,
+      failure_fields: [...POLL_CONTRACT.failure_fields],
+      result_url_field: POLL_CONTRACT.result_url_field,
+    },
+    terminal_statuses: [...POLL_CONTRACT.terminal_statuses],
+    success_status: POLL_CONTRACT.success_status,
+    failure_fields: [...POLL_CONTRACT.failure_fields],
+  };
+}
+
 export const jobsRouter: ExpressRouter = Router();
 
-jobsRouter.get("/health", (_req, res) => {
+jobsRouter.get("/health", async (_req, res) => {
+  const [temporal, oldestQueuedAgeSeconds] = await Promise.all([
+    probeTemporal(),
+    jobStore.oldestQueuedAgeSeconds().catch(() => null),
+  ]);
   res.json({
     ok: true,
     service: "api-gateway",
     services: Object.keys(SERVICE_MANIFESTS),
+    temporal,
+    oldest_queued_age_seconds: oldestQueuedAgeSeconds,
   });
 });
 
@@ -95,15 +124,20 @@ jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
       path: manifest.endpoint_path,
       url: `${baseUrl}${manifest.endpoint_path}`,
       content_type: "application/json",
-      body_shape: { input: "object — see discovery input_schema / example_request" },
+      body_shape: {
+        preferred: { input: "object — see discovery input_schema / example_request" },
+        also_accepted: "Flattened top-level fields (same keys as input) without nesting under input",
+        marketplace:
+          "Optional marketplace.job_id / marketplace.agent_id, or X-Okx-Job-Id / X-Marketplace-Job-Id headers",
+      },
       unpaid_response:
         "HTTP 402 with PAYMENT-REQUIRED (x402 v2). Settle USD₮0 on eip155:196, then replay the same POST with PAYMENT-SIGNATURE.",
       paid_response:
-        "HTTP 202 with job_id and status_url. Poll GET /v1/jobs/{job_id} (free) until status is completed, then download artifacts[].url.",
+        "HTTP 202 with job_id, status_url, and poll contract. Poll GET /v1/jobs/{job_id} (free) until status is completed, failed, or cancelled. On completed download artifacts[].url; on failed read error + error_code.",
       ...(scrapeFirst
         ? {
             scrape_failures:
-              "If status=failed after create, read error + error_code. Scrape codes: product_url_*. Social-listening also uses reddit_no_threads / reddit_no_drafts / reddit_ingest_failed when no usable comments can be produced (jobs do not complete with an empty PDF). Optional input.product_name continues when the URL cannot be scraped.",
+              "If status=failed after create, read error + error_code. Poll until status is completed OR failed (do not only wait for completed). Prefer a scrapeable URL or include product_name. Social-listening continues via product_name or hostname fallback when the URL is unreachable; reddit_no_threads / reddit_no_drafts when no usable comments.",
           }
         : {}),
     },
@@ -111,6 +145,7 @@ jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
     eta_seconds: manifest.sla_minutes * 60,
     discovery_url: `${baseUrl}/v1/discovery`,
     example_request: entry?.example_request ?? { input: {} },
+    ...pollHints("{job_id}"),
   });
 });
 
@@ -121,7 +156,9 @@ jobsRouter.post("/v1/services/:service/jobs", async (req, res) => {
   }
   const service: ServiceName = parsedService.data;
 
-  const body = CreateJobRequestSchema.safeParse(req.body ?? {});
+  const body = CreateJobRequestSchema.safeParse(
+    normalizeCreateJobBody(req.body ?? {}),
+  );
   if (!body.success) {
     return res.status(400).json({ error: "invalid_body", details: body.error.flatten() });
   }
@@ -134,6 +171,7 @@ jobsRouter.post("/v1/services/:service/jobs", async (req, res) => {
     });
   }
 
+  const marketplaceIds = extractMarketplaceIds(body.data, req.headers);
   const idempotencyKey = req.header("x-idempotency-key") ?? undefined;
   const job = await jobStore.create(
     service,
@@ -142,21 +180,37 @@ jobsRouter.post("/v1/services/:service/jobs", async (req, res) => {
       input: inputCheck.data as Record<string, unknown>,
     },
     idempotencyKey,
+    marketplaceIds,
   );
 
-  void dispatchJob(job.id).catch((err) => {
+  // Await enqueue so 202 reflects durable dispatch (or pollable failed).
+  try {
+    await dispatchJob(job.id);
+  } catch (err) {
     log.error("dispatch crashed", {
       job_id: job.id,
       error: err instanceof Error ? err.message : String(err),
     });
-  });
+  }
+
+  const fresh = (await jobStore.get(job.id)) ?? job;
 
   return res.status(202).json({
-    job_id: job.id,
-    list_price_usd: job.list_price_usd,
-    eta_seconds: job.eta_seconds ?? SERVICE_MANIFESTS[service].sla_minutes * 60,
-    status_url: `/v1/jobs/${job.id}`,
-    status: job.status,
+    job_id: fresh.id,
+    list_price_usd: fresh.list_price_usd,
+    eta_seconds: fresh.eta_seconds ?? SERVICE_MANIFESTS[service].sla_minutes * 60,
+    status_url: `/v1/jobs/${fresh.id}`,
+    status: fresh.status,
+    ...(fresh.marketplace_job_id
+      ? { marketplace_job_id: fresh.marketplace_job_id }
+      : {}),
+    ...(fresh.marketplace_agent_id
+      ? { marketplace_agent_id: fresh.marketplace_agent_id }
+      : {}),
+    ...(fresh.workflow_id ? { workflow_id: fresh.workflow_id } : {}),
+    ...(fresh.error ? { error: fresh.error } : {}),
+    ...(fresh.error_code ? { error_code: fresh.error_code } : {}),
+    ...pollHints(fresh.id),
   });
 });
 
@@ -174,10 +228,16 @@ jobsRouter.get("/v1/jobs/:jobId", async (req, res) => {
     list_price_usd: job.list_price_usd,
     error: job.error,
     ...(job.error_code ? { error_code: job.error_code } : {}),
+    ...(job.marketplace_job_id ? { marketplace_job_id: job.marketplace_job_id } : {}),
+    ...(job.marketplace_agent_id
+      ? { marketplace_agent_id: job.marketplace_agent_id }
+      : {}),
+    ...(job.workflow_id ? { workflow_id: job.workflow_id } : {}),
     created_at: job.created_at,
     updated_at: job.updated_at,
     eta_seconds: job.eta_seconds,
     step: (job as { step?: string }).step,
+    ...pollHints(job.id),
   });
 });
 

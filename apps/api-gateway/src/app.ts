@@ -8,6 +8,7 @@ import {
 import { createPool, migrate, getJobStore, setJobStoreForTests, PostgresJobStore } from "@founderforge/db";
 import { jobsRouter } from "./routes/jobs.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
+import { reconcileStaleQueuedJobs } from "./jobs/dispatch.js";
 
 const log = createLogger("api-gateway");
 
@@ -20,6 +21,13 @@ export interface CreateAppOptions {
    * When payments are enabled, missing/invalid OKX config throws at startup.
    */
   skipPayments?: boolean;
+  /**
+   * Test hook: inject middleware that runs in the payment slot (before routes).
+   * Used to assert unpaid POSTs return 402 before body validation.
+   */
+  paymentMiddleware?: RequestHandler;
+  /** Disable the stale-queued reconciler (tests). */
+  skipReconciler?: boolean;
 }
 
 export interface AppWithPayments {
@@ -58,7 +66,10 @@ export async function createAppWithPayments(
   const skipPayments = opts.skipPayments === true || paymentEnv.bypass;
 
   let payments: OkxPaymentProtection | undefined;
-  if (skipPayments) {
+  if (opts.paymentMiddleware) {
+    app.use(opts.paymentMiddleware);
+    log.info("injected payment middleware (test/override)");
+  } else if (skipPayments) {
     log.warn("OKX payment middleware skipped (PAYMENTS_BYPASS or skipPayments)");
   } else {
     payments = createOkxPaymentProtection(paymentEnv);
@@ -71,6 +82,22 @@ export async function createAppWithPayments(
   }
 
   app.use(jobsRouter);
+
+  if (!opts.skipReconciler) {
+    const intervalMs = Number(process.env.QUEUE_RECONCILE_INTERVAL_MS ?? 30_000);
+    const olderThanMs = Number(process.env.QUEUE_STALE_MS ?? 30_000);
+    if (Number.isFinite(intervalMs) && intervalMs > 0) {
+      const tick = () => {
+        void reconcileStaleQueuedJobs(olderThanMs).catch((err) => {
+          log.warn("stale queue reconcile failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      };
+      setInterval(tick, intervalMs).unref?.();
+      log.info("stale queued reconciler started", { intervalMs, olderThanMs });
+    }
+  }
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     log.error("unhandled error", {

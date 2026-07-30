@@ -13,7 +13,10 @@ import {
   closePool,
   setJobStoreForTests,
 } from "@founderforge/db";
-import { setStartCompetitorResearchWorkflowForTests } from "./temporal/client.js";
+import {
+  setStartCompetitorResearchWorkflowForTests,
+  setStartSocialListeningWorkflowForTests,
+} from "./temporal/client.js";
 
 loadRootEnv(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."));
 
@@ -49,17 +52,22 @@ describe("api-gateway", { skip: !hasDb }, () => {
       });
       return `competitor-research:${job_id}`;
     });
+    setStartSocialListeningWorkflowForTests(async ({ job_id }) => {
+      return `social-listening:${job_id}`;
+    });
 
     const mod = await import("./app.js");
     app = await mod.createApp({
       jobStore: store,
       skipMigrate: true,
       skipPayments: true,
+      skipReconciler: true,
     });
   });
 
   after(async () => {
     setStartCompetitorResearchWorkflowForTests(undefined);
+    setStartSocialListeningWorkflowForTests(undefined);
     setJobStoreForTests(undefined);
     await closePool();
   });
@@ -91,6 +99,10 @@ describe("api-gateway", { skip: !hasDb }, () => {
     assert.equal(res.body.schema_version, "1.0.0");
     assert.equal(res.body.protocol.name, "paid_create_free_poll");
     assert.equal(res.body.protocol.polling.result_url_field, "artifacts[].url");
+    assert.deepEqual(res.body.protocol.polling.failure_fields, [
+      "error",
+      "error_code",
+    ]);
     assert.equal(res.body.services.length, 6);
     assert.ok(
       res.body.free_endpoints.some(
@@ -211,6 +223,68 @@ describe("api-gateway", { skip: !hasDb }, () => {
     assert.equal(poll.body.error_code, "product_url_no_content");
     assert.match(String(poll.body.error), /trackly\.app/);
     assert.equal(poll.body.input, undefined);
+  });
+
+  it("accepts flattened create-job body without nested input", async () => {
+    const create = await request(app)
+      .post("/v1/services/social-listening/jobs")
+      .set("X-Idempotency-Key", `flat-${Date.now()}`)
+      .send({ product_url: "https://linear.app", max_posts: 2 });
+
+    assert.equal(create.status, 202);
+    assert.ok(create.body.job_id);
+    assert.deepEqual(create.body.terminal_statuses, [
+      "completed",
+      "failed",
+      "cancelled",
+    ]);
+    assert.equal(create.body.poll?.success_status, "completed");
+    assert.ok(create.body.poll?.failure_fields?.includes("error_code"));
+  });
+
+  it("captures marketplace ids from body and returns poll contract", async () => {
+    const create = await request(app)
+      .post("/v1/services/social-listening/jobs")
+      .set("X-Idempotency-Key", `mkt-${Date.now()}`)
+      .set("X-Okx-Job-Id", "should-be-overridden-by-body")
+      .send({
+        input: { product_url: "https://linear.app", max_posts: 1 },
+        marketplace: { job_id: "okx-job-42", agent_id: "9733" },
+      });
+
+    assert.equal(create.status, 202);
+    assert.equal(create.body.marketplace_job_id, "okx-job-42");
+    assert.equal(create.body.marketplace_agent_id, "9733");
+    assert.ok(create.body.workflow_id);
+
+    const poll = await request(app).get(`/v1/jobs/${create.body.job_id}`);
+    assert.equal(poll.status, 200);
+    assert.equal(poll.body.marketplace_job_id, "okx-job-42");
+    assert.deepEqual(poll.body.terminal_statuses, [
+      "completed",
+      "failed",
+      "cancelled",
+    ]);
+    assert.equal(poll.body.input, undefined);
+  });
+
+  it("unpaid empty POST returns 402 before invalid_body", async () => {
+    const mod = await import("./app.js");
+    const paidApp = await mod.createApp({
+      jobStore: store,
+      skipMigrate: true,
+      skipReconciler: true,
+      paymentMiddleware: (_req, res, _next) => {
+        res.status(402).json({ error: "payment_required" });
+      },
+    });
+
+    const res = await request(paidApp)
+      .post("/v1/services/social-listening/jobs")
+      .send({});
+
+    assert.equal(res.status, 402);
+    assert.notEqual(res.body.error, "invalid_body");
   });
 
   it("refuses to start paid mode without OKX credentials", async () => {

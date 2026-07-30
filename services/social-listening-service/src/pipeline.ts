@@ -12,6 +12,17 @@ export interface PipelineOptions {
   onStep?: (step: string) => void | Promise<void>;
 }
 
+function productNameFromUrl(websiteUrl: string): string | null {
+  try {
+    const host = new URL(websiteUrl).hostname.replace(/^www\./i, "");
+    const label = host.split(".")[0]?.trim();
+    if (!label || label.length < 2) return null;
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  } catch {
+    return null;
+  }
+}
+
 function productFromNameFallback(name: string, websiteUrl: string): ProductConfig {
   let host = "the product site";
   try {
@@ -71,14 +82,17 @@ export async function runPipeline(
       onStep: opts.onStep,
     });
   } catch (err) {
-    if (isProductUrlError(err) && input.product_name?.trim()) {
-      log.warn("product URL scrape failed; using product_name fallback", {
+    const fallbackName =
+      input.product_name?.trim() || productNameFromUrl(input.product_url);
+    if (isProductUrlError(err) && fallbackName) {
+      log.warn("product URL scrape failed; using name fallback", {
         code: err.code,
-        product_name: input.product_name,
+        product_name: fallbackName,
+        from_input: Boolean(input.product_name?.trim()),
       });
       result = await runPlanCycle({
         websiteUrl: input.product_url,
-        product: productFromNameFallback(input.product_name.trim(), input.product_url),
+        product: productFromNameFallback(fallbackName, input.product_url),
         maxPosts: input.max_posts,
         onStep: opts.onStep,
       });

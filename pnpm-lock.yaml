@@ -86,6 +86,28 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  apps/marketplace-bridge:
+    dependencies:
+      '@founderforge/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@founderforge/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@founderforge/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.20.1
+      tsx:
+        specifier: ^4.20.3
+        version: 4.23.1
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   apps/ops-dashboard:
     dependencies:
       '@founderforge/observability':
@@ -560,34 +582,6 @@ importers:
       '@types/pdfkit':
         specifier: ^0.13.9
         version: 0.13.9
-      tsx:
-        specifier: ^4.20.3
-        version: 4.23.1
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-
-  services/social-post-service:
-    dependencies:
-      '@founderforge/connectors':
-        specifier: workspace:*
-        version: link:../../packages/connectors
-      '@founderforge/llm-core':
-        specifier: workspace:*
-        version: link:../../packages/llm-core
-      '@founderforge/observability':
-        specifier: workspace:*
-        version: link:../../packages/observability
-      '@founderforge/policy':
-        specifier: workspace:*
-        version: link:../../packages/policy
-      '@founderforge/schemas':
-        specifier: workspace:*
-        version: link:../../packages/schemas
-      zod:
-        specifier: ^3.25.67
-        version: 3.25.76
-    devDependencies:
       tsx:
         specifier: ^4.20.3
         version: 4.23.1

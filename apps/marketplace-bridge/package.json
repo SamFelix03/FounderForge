@@ -1,0 +1,24 @@
+{
+  "name": "@founderforge/marketplace-bridge",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "test": "node --import tsx --test 'src/**/*.test.ts' 'src/*.test.ts'"
+  },
+  "dependencies": {
+    "@founderforge/db": "workspace:*",
+    "@founderforge/observability": "workspace:*",
+    "@founderforge/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

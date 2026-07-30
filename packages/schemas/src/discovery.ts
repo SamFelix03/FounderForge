@@ -90,6 +90,7 @@ export type FounderForgeDiscoveryDocument = {
       recommended_interval_seconds: number;
       terminal_statuses: Array<"completed" | "failed" | "cancelled">;
       success_status: "completed";
+      failure_fields: Array<"error" | "error_code">;
       result_field: "artifacts";
       result_url_field: "artifacts[].url";
     };
@@ -183,7 +184,7 @@ const SERVICE_META: Record<
     summary:
       "Finds live Reddit threads where people want solutions like yours and drafts ready-to-post replies.",
     provide:
-      "product_url (required). Optional: product_name (fallback if the URL cannot be scraped), max_posts (1–20). Jobs fail with reddit_no_threads / reddit_no_drafts when no usable comments can be produced (no empty PDF).",
+      "product_url (required). Optional: product_name, max_posts (1–20). If the URL cannot be scraped, the job continues using product_name when provided, otherwise a hostname-derived name (e.g. tasknest.app → Tasknest). Empty Reddit packs fail with reddit_no_threads / reddit_no_drafts (no blank PDF).",
     deliverable:
       "PDF playbook (type=pdf_report) plus thread URLs (type=reddit_thread). Primary file is artifacts[].url on pdf_report.",
     inputSchema: SocialListeningInputSchema,
@@ -340,7 +341,7 @@ export function buildDiscoveryDocument(opts?: {
       pattern: "A",
       name: "paid_create_free_poll",
       summary:
-        "Pay once on POST job create (x402). Then GET /v1/jobs/{job_id} for free until status is completed, and download artifacts[].url.",
+        "Pay once on POST job create (x402). Then GET /v1/jobs/{job_id} for free until status is completed, failed, or cancelled. On completed download artifacts[].url; on failed read error + error_code.",
       steps: [
         {
           step: 1,
@@ -388,6 +389,7 @@ export function buildDiscoveryDocument(opts?: {
         recommended_interval_seconds: 10,
         terminal_statuses: ["completed", "failed", "cancelled"],
         success_status: "completed",
+        failure_fields: ["error", "error_code"],
         result_field: "artifacts",
         result_url_field: "artifacts[].url",
       },
@@ -454,7 +456,7 @@ export function buildDiscoveryDocument(opts?: {
         path_url: `${baseUrl}/v1/jobs/{job_id}`,
         paid: false,
         description:
-          "Poll job status. When completed, artifacts[].url is the deliverable. On failed, read error + optional error_code (e.g. product_url_no_content).",
+          "Poll job status until completed, failed, or cancelled (do not wait only for completed). When completed, artifacts[].url is the deliverable. On failed, read error + error_code (e.g. product_url_no_content).",
       },
       {
         method: "GET",

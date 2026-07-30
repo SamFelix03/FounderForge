@@ -1,6 +1,6 @@
 # Railway deploy (FounderForge)
 
-You need **4 pieces**: Railway Postgres (jobs) · Temporal · api-gateway · orchestrator.  
+You need **5 pieces**: Railway Postgres (jobs) · Temporal · api-gateway · orchestrator · marketplace-bridge.  
 Supabase + vendor API keys stay external. Redis is unused — skip it.
 
 ## Exactly what to do for Temporal
@@ -78,11 +78,12 @@ TEMPORAL_TASK_QUEUE=founderforge
 | 2 | Temporal | `infra/temporal/Dockerfile` **or** Temporal Cloud | private / SaaS |
 | 3 | api-gateway | `apps/api-gateway/Dockerfile` | **yes** |
 | 4 | orchestrator | `apps/orchestrator/Dockerfile` | **no** |
+| 5 | marketplace-bridge | `apps/marketplace-bridge/Dockerfile` | **no** (needs `onchainos` session) |
 
 ### api-gateway
 
 - Builder: Dockerfile at `apps/api-gateway/Dockerfile` (context = repo root).
-- Health: `GET /health`
+- Health: `GET /health` (includes Temporal probe + oldest queued age).
 - Env: `DATABASE_URL` (jobs Postgres), `TEMPORAL_*`, `PORT`, payments (`PAYMENTS_BYPASS=false` + OKX + `PAY_TO`).
 
 ### orchestrator
@@ -91,10 +92,16 @@ TEMPORAL_TASK_QUEUE=founderforge
 - Env: same `DATABASE_URL` + `TEMPORAL_*`, plus `SUPABASE_*` and all feature API keys from `env.example`.
 - Give it enough memory (Playwright / ffmpeg / long activities).
 
+### marketplace-bridge
+
+- Builder: Dockerfile at `apps/marketplace-bridge/Dockerfile` (context = repo root).
+- Polls OKX accepted tasks for `ASP_AGENT_ID` (9733), correlates to FounderForge jobs, runs `onchainos agent deliver` on terminal success/failure.
+- Env: `DATABASE_URL`, `FOUNDERFORGE_API_BASE`, `ASP_AGENT_ID=9733`, `ONCHAINOS` (+ wallet login on that host).
+
 ### Shared
 
 ```bash
-DATABASE_URL=${{Postgres.DATABASE_URL}}   # jobs DB — both apps
+DATABASE_URL=${{Postgres.DATABASE_URL}}   # jobs DB — gateway, worker, bridge
 TEMPORAL_TASK_QUEUE=founderforge          # must match on gateway + worker
 ```
 

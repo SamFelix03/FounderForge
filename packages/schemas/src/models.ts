@@ -24,6 +24,13 @@ export const CreateJobRequestSchema = z.object({
   input: z.record(z.unknown()),
   callback_url: z.string().url().optional(),
   priority: z.enum(["low", "normal", "high"]).optional().default("normal"),
+  /** Optional OKX marketplace correlation (A2MCP / task-402-pay). */
+  marketplace: z
+    .object({
+      job_id: z.string().min(1).optional(),
+      agent_id: z.string().min(1).optional(),
+    })
+    .optional(),
 });
 export type CreateJobRequest = z.infer<typeof CreateJobRequestSchema>;
 
@@ -62,6 +69,11 @@ export const JobRecordSchema = z.object({
   error_code: z.string().optional(),
   callback_url: z.string().url().optional(),
   idempotency_key: z.string().optional(),
+  marketplace_job_id: z.string().optional(),
+  marketplace_agent_id: z.string().optional(),
+  workflow_id: z.string().optional(),
+  dispatched_at: z.string().datetime().optional(),
+  dispatch_error: z.string().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
   eta_seconds: z.number().int().nonnegative().optional(),
@@ -74,6 +86,21 @@ export const CreateJobResponseSchema = z.object({
   eta_seconds: z.number().int().nonnegative(),
   status_url: z.string(),
   status: JobStatusSchema,
+  /** Marketplace agent poll contract (Pattern A). */
+  poll: z
+    .object({
+      method: z.literal("GET"),
+      path: z.string(),
+      recommended_interval_seconds: z.number().int().positive(),
+      terminal_statuses: z.array(JobStatusSchema),
+      success_status: z.literal("completed"),
+      failure_fields: z.array(z.string()),
+      result_url_field: z.string(),
+    })
+    .optional(),
+  terminal_statuses: z.array(JobStatusSchema).optional(),
+  success_status: z.literal("completed").optional(),
+  failure_fields: z.array(z.string()).optional(),
 });
 export type CreateJobResponse = z.infer<typeof CreateJobResponseSchema>;
 

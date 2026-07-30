@@ -37,12 +37,13 @@ Buyer                         FounderForge                         Chain / OKX
   │   job_id + PAYMENT-RESPONSE    │ enqueue Temporal workflow          │
   │                                │                                    │
   │ 4. GET /v1/jobs/{job_id}       │                                    │
-  │    (poll until completed)      │                                    │
+  │    (poll until completed|      │                                    │
+  │     failed|cancelled)          │                                    │
   │───────────────────────────────▶│                                    │
-  │◀── artifacts[] (signed URLs) ──│                                    │
+  │◀── artifacts[] or error_code ──│                                    │
 ```
 
-**Important:** Payment unlocks **job creation** only. Delivery is asynchronous. Free routes (`GET /health`, `GET /v1/services`, `GET /v1/jobs/:id`) stay unpaid.
+**Important:** Payment unlocks **job creation** only. Delivery is asynchronous. Free routes (`GET /health`, `GET /v1/services`, `GET /v1/jobs/:id`) stay unpaid. Treat `failed` as terminal — read `error` / `error_code`; do not keep polling until ETA.
 
 ---
 
@@ -314,7 +315,24 @@ Catalog / discovery (unpaid): `GET /v1/discovery` (alias: `GET /v1/services`) �
 4. Final binary lands in **Supabase Storage** (or external CDN); job row gets `artifacts` + `status=completed`.
 5. Buyer polls `GET /v1/jobs/:id` and downloads `artifacts[].url`.
 
-If create returns 202 but status stays `queued`, Temporal address / worker / task queue is misconfigured — payment already succeeded.
+If create returns 202 but status stays `queued`, Temporal address / worker / task queue is misconfigured — payment already succeeded. The gateway awaits Temporal enqueue and marks `temporal_enqueue_failed:…` when start fails; a reconciler retries stale `queued` rows.
+
+---
+
+## Marketplace ASP bridge (#9733)
+
+OKX marketplace tasks stay `accepted` until the ASP calls `onchainos agent deliver`. FounderForge Pattern A only completes the HTTP job — the **marketplace-bridge** service correlates OKX `jobId` → FounderForge UUID and delivers success/failure text on-chain.
+
+```bash
+# apps/marketplace-bridge env
+FOUNDERFORGE_API_BASE=https://founderforge-api-production.up.railway.app
+ASP_AGENT_ID=9733
+ONCHAINOS=onchainos          # must be logged in on that host
+DATABASE_URL=…               # same Postgres as gateway (marketplace_links)
+# BRIDGE_DRY_RUN=1           # optional
+```
+
+Prefer buyers send `marketplace.job_id` (or `X-Okx-Job-Id`) on create so correlation is exact. Otherwise the bridge matches recent jobs by `product_url` / `website_url` extracted from the OKX task description.
 
 ---
 
