@@ -105,6 +105,20 @@ export class MarketplaceLinkStore {
     return rowToLink(result.rows[0]);
   }
 
+  async markSkipped(okxJobId: string, reason: string): Promise<MarketplaceLink> {
+    const result = await this.pool.query<LinkRow>(
+      `UPDATE marketplace_links SET
+        delivery_status = 'skipped',
+        last_delivery_error = $2,
+        updated_at = NOW()
+       WHERE okx_job_id = $1
+       RETURNING *`,
+      [okxJobId, reason.slice(0, 2000)],
+    );
+    if (!result.rows[0]) throw new Error(`marketplace link not found: ${okxJobId}`);
+    return rowToLink(result.rows[0]);
+  }
+
   async markDeliveryFailed(
     okxJobId: string,
     error: string,

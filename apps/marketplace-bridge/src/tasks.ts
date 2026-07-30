@@ -155,6 +155,26 @@ export function isAcceptedX402Task(task: OkxActiveTask): boolean {
   );
 }
 
+/** Escrow (1) supports ASP deliver/submit. x402 (3) does not — buyer completes after poll. */
+export function isEscrowPaymentMode(task: OkxActiveTask): boolean {
+  const mode = task.paymentMode;
+  return (
+    mode === 1 ||
+    mode === "1" ||
+    (typeof mode === "string" && /escrow/i.test(mode))
+  );
+}
+
+export function isX402PaymentMode(task: OkxActiveTask): boolean {
+  const mode = task.paymentMode;
+  if (mode === undefined || mode === null || mode === "") return true; // FounderForge A2MCP default
+  return (
+    mode === 3 ||
+    mode === "3" ||
+    (typeof mode === "string" && /x402/i.test(mode))
+  );
+}
+
 export function inferServiceFromText(text: string): string | undefined {
   const t = text.toLowerCase();
   if (/social[- ]?listening|reddit/.test(t)) return "social-listening";

@@ -11,6 +11,8 @@ import {
   extractUrls,
   inferServiceFromText,
   isAcceptedX402Task,
+  isEscrowPaymentMode,
+  isX402PaymentMode,
   parseActiveTasks,
   type OkxActiveTask,
 } from "./tasks.js";
@@ -139,7 +141,33 @@ export class MarketplaceBridge {
       log.info("correlated marketplace task", {
         okx_job_id: task.jobId,
         founderforge_job_id: ffJob.id,
+        payment_mode: task.paymentMode ?? null,
       });
+    }
+
+    // x402 (FounderForge A2MCP): ASP must NOT call deliver/submit. Buyer polls FF
+    // artifacts then runs `onchainos agent complete`. Escrow is the only mode that
+    // supports provider deliver.
+    if (isX402PaymentMode(task) && !isEscrowPaymentMode(task)) {
+      const job = await this.pollFfJob(link.founderforge_job_id);
+      if (!job || !TERMINAL.has(job.status)) {
+        log.info("x402 task waiting for FounderForge terminal (buyer will complete)", {
+          okx_job_id: task.jobId,
+          founderforge_job_id: link.founderforge_job_id,
+          status: job?.status ?? "unknown",
+        });
+        return;
+      }
+      await links.markSkipped(
+        task.jobId,
+        "x402: ASP deliver unsupported; buyer polls artifacts then agent complete",
+      );
+      log.info("x402 task FF terminal — skipped ASP deliver (buyer completes)", {
+        okx_job_id: task.jobId,
+        founderforge_job_id: job.id,
+        ff_status: job.status,
+      });
+      return;
     }
 
     await this.deliverIfTerminal(link);
@@ -259,6 +287,17 @@ export class MarketplaceBridge {
       if (/submitted|already|completed|close/i.test(err)) {
         await links.markDelivered(link.okx_job_id);
         log.info("deliver skipped — already terminal on-chain", {
+          okx_job_id: link.okx_job_id,
+        });
+        return;
+      }
+      // x402 rejects ASP deliver — mark skipped so we stop retrying
+      if (/paymentMode\s*=\s*3|x402.*deliver|deliver\/submit is only supported for escrow/i.test(err)) {
+        await links.markSkipped(
+          link.okx_job_id,
+          "x402: ASP deliver unsupported; buyer polls artifacts then agent complete",
+        );
+        log.info("x402 reject on deliver — marked skipped", {
           okx_job_id: link.okx_job_id,
         });
         return;
