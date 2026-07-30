@@ -61,8 +61,8 @@ COPY apps/marketplace-bridge/docker/login.sh /usr/local/bin/ff-onchainos-login
 RUN chmod +x /entrypoint.sh /usr/local/bin/ff-onchainos-login \
   && mkdir -p /data/onchainos
 
-# Persist wallet session / keyring.enc / machine-identity across deploys.
-VOLUME ["/data/onchainos"]
+# Persist wallet session via a Railway Volume mounted at /data/onchainos
+# (do not use Dockerfile VOLUME — Railway rejects it).
 
 # Railway injects PORT; health listens there (or BRIDGE_HEALTH_PORT).
 EXPOSE 4091
