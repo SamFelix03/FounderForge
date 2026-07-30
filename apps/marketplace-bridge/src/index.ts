@@ -10,6 +10,10 @@ const log = createLogger("marketplace-bridge");
 
 async function main() {
   const cfg = loadBridgeConfig();
+  if (cfg.onchainosHome) {
+    process.env.ONCHAINOS_HOME = cfg.onchainosHome;
+  }
+
   const pool = createPool();
   await migrate(pool);
   setJobStoreForTests(new PostgresJobStore(pool));
@@ -20,6 +24,8 @@ async function main() {
     asp_agent_id: cfg.aspAgentId,
     poll_interval_ms: cfg.pollIntervalMs,
     dry_run: cfg.dryRun,
+    onchainos_home: cfg.onchainosHome || process.env.ONCHAINOS_HOME || null,
+    require_wallet: cfg.requireWallet,
   });
 
   const run = async () => {

@@ -95,8 +95,22 @@ TEMPORAL_TASK_QUEUE=founderforge
 ### marketplace-bridge
 
 - Builder: Dockerfile at `apps/marketplace-bridge/Dockerfile` (context = repo root).
+- Installs Linux **onchainos** + **okx-a2a**, persists wallet session on a volume at `/data/onchainos`.
 - Polls OKX accepted tasks for `ASP_AGENT_ID` (9733), correlates to FounderForge jobs, runs `onchainos agent deliver` on terminal success/failure.
-- Env: `DATABASE_URL`, `FOUNDERFORGE_API_BASE`, `ASP_AGENT_ID=9733`, `ONCHAINOS` (+ wallet login on that host).
+- **Full setup:** [marketplace-bridge-railway.md](./marketplace-bridge-railway.md) (env, volume, one-time `ff-onchainos-login`).
+
+Required env (minimum):
+
+```bash
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+FOUNDERFORGE_API_BASE=https://founderforge-api-production.up.railway.app
+ASP_AGENT_ID=9733
+ONCHAINOS_HOME=/data/onchainos
+BRIDGE_REQUIRE_WALLET=0   # set 1 after login
+# BRIDGE_DRY_RUN=1        # first smoke
+```
+
+Volume mount: `/data/onchainos` (persistent). After first deploy, Railway shell → `ff-onchainos-login`.
 
 ### Shared
 
@@ -113,7 +127,7 @@ TEMPORAL_TASK_QUEUE=founderforge          # must match on gateway + worker
 # from repo root
 docker build -f apps/api-gateway/Dockerfile -t ff-gateway .
 docker build -f apps/orchestrator/Dockerfile -t ff-orchestrator .
-docker build -f infra/temporal/Dockerfile -t ff-temporal .
+docker build -f apps/marketplace-bridge/Dockerfile -t ff-marketplace-bridge .
 ```
 
 ---

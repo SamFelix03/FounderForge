@@ -10,7 +10,11 @@ export type OnchainOsResult = {
 export async function runOnchainOs(
   bin: string,
   args: string[],
-  opts: { timeoutMs?: number; dryRun?: boolean } = {},
+  opts: {
+    timeoutMs?: number;
+    dryRun?: boolean;
+    env?: NodeJS.ProcessEnv;
+  } = {},
 ): Promise<OnchainOsResult> {
   if (opts.dryRun) {
     return {
@@ -22,10 +26,11 @@ export async function runOnchainOs(
   }
 
   const timeoutMs = opts.timeoutMs ?? 120_000;
+  const env = { ...process.env, ...(opts.env ?? {}) };
   return new Promise((resolve) => {
     const child = spawn(bin, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
+      env,
     });
     let stdout = "";
     let stderr = "";
@@ -66,13 +71,19 @@ export async function runOnchainOs(
   });
 }
 
+/** Returns true when `onchainos wallet status` reports ok. */
+export async function isWalletReady(bin: string): Promise<boolean> {
+  const result = await runOnchainOs(bin, ["wallet", "status"], { timeoutMs: 30_000 });
+  const blob = `${result.stdout}\n${result.stderr}`;
+  return /"ok"\s*:\s*true/.test(blob);
+}
+
 export function tryParseJson(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) return undefined;
   try {
     return JSON.parse(trimmed);
   } catch {
-    // Some CLI wraps JSON in logs — try last {...} block
     const start = trimmed.lastIndexOf("{");
     const end = trimmed.lastIndexOf("}");
     if (start >= 0 && end > start) {

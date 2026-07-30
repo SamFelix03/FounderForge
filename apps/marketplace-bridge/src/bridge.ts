@@ -6,7 +6,7 @@ import {
 import type { JobRecord, ServiceName } from "@founderforge/schemas";
 import { createLogger } from "@founderforge/observability";
 import type { BridgeConfig } from "./config.js";
-import { runOnchainOs, tryParseJson } from "./onchainos.js";
+import { isWalletReady, runOnchainOs, tryParseJson } from "./onchainos.js";
 import {
   extractUrls,
   inferServiceFromText,
@@ -32,7 +32,23 @@ type FfPollJob = {
 export class MarketplaceBridge {
   constructor(private readonly cfg: BridgeConfig) {}
 
+  private cliEnv(): NodeJS.ProcessEnv | undefined {
+    if (!this.cfg.onchainosHome) return undefined;
+    return { ONCHAINOS_HOME: this.cfg.onchainosHome };
+  }
+
   async tick(): Promise<void> {
+    const walletReady = await isWalletReady(this.cfg.onchainosBin);
+    if (!walletReady) {
+      log.warn("onchainos wallet not ready — skipping tick (run ff-onchainos-login)", {
+        onchainos_home: this.cfg.onchainosHome || null,
+      });
+      if (this.cfg.requireWallet) {
+        throw new Error("onchainos_wallet_not_ready");
+      }
+      return;
+    }
+
     const tasks = await this.fetchAcceptedTasks();
     log.info("bridge tick", { accepted: tasks.length, dry_run: this.cfg.dryRun });
 
@@ -68,7 +84,7 @@ export class MarketplaceBridge {
     const tip = await runOnchainOs(
       this.cfg.onchainosBin,
       ["agent", "task-in-progress", "--agent-ids", this.cfg.aspAgentId],
-      { dryRun: false, timeoutMs: 60_000 },
+      { dryRun: false, timeoutMs: 60_000, env: this.cliEnv() },
     );
     if (tip.ok) {
       const parsed = tryParseJson(tip.stdout) ?? tryParseJson(tip.stderr);
@@ -83,7 +99,7 @@ export class MarketplaceBridge {
     const active = await runOnchainOs(
       this.cfg.onchainosBin,
       ["agent", "active-tasks", "--role", "asp"],
-      { dryRun: false, timeoutMs: 60_000 },
+      { dryRun: false, timeoutMs: 60_000, env: this.cliEnv() },
     );
     if (active.ok) {
       const parsed = tryParseJson(active.stdout) ?? tryParseJson(active.stderr);
@@ -225,7 +241,7 @@ export class MarketplaceBridge {
         "--message",
         message,
       ],
-      { dryRun: this.cfg.dryRun, timeoutMs: 180_000 },
+      { dryRun: this.cfg.dryRun, timeoutMs: 180_000, env: this.cliEnv() },
     );
 
     const links = getMarketplaceLinkStore();
