@@ -14,7 +14,7 @@ describe("payments-okx", () => {
     assert.equal(env.bypass, true);
   });
 
-  it("builds six paid POST routes with exact scheme", () => {
+  it("builds paid POST and GET routes with exact scheme", () => {
     const routes = buildPaidRoutesConfig(
       "0x0000000000000000000000000000000000000001",
       "eip155:1952",
@@ -33,7 +33,10 @@ describe("payments-okx", () => {
       route.resource,
       "https://founderforge-api-production.up.railway.app/v1/services/competitor-research/jobs",
     );
-    assert.equal(Object.keys(routes as object).length, 6);
+    assert.ok(
+      (routes as Record<string, unknown>)["GET /v1/services/competitor-research/jobs"],
+    );
+    assert.equal(Object.keys(routes as object).length, 12);
     assert.equal(
       (routes as Record<string, unknown>)["POST /v1/services/social-post/jobs"],
       undefined,

@@ -135,15 +135,12 @@ describe("api-gateway", { skip: !hasDb }, () => {
     assert.equal(services.body.schema_version, "1.0.0");
   });
 
-  it("GET on paid job URL returns free usage guide (no job create)", async () => {
+  it("GET on paid job URL does not create jobs (POST-only)", async () => {
     const res = await request(app).get("/v1/services/brand-kit/jobs");
-    assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
-    assert.equal(res.body.paid, false);
-    assert.equal(res.body.service, "brand-kit");
-    assert.equal(res.body.how_to_call.method, "POST");
+    assert.equal(res.status, 405);
+    assert.equal(res.body.error, "method_not_allowed");
+    assert.deepEqual(res.body.allow, ["POST"]);
     assert.ok(String(res.body.discovery_url).endsWith("/v1/discovery"));
-    assert.ok(res.body.example_request?.input);
 
     const unknown = await request(app).get("/v1/services/not-a-service/jobs");
     assert.equal(unknown.status, 404);

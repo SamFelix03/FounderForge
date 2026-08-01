@@ -90,9 +90,8 @@ jobsRouter.get("/health", async (_req, res) => {
 });
 
 /**
- * Free usage probe on paid job URLs. Marketplace validators often GET the listed
- * endpoint; never create a job here — guide callers to POST + discovery.
- * Not registered in OKX payment routes (unpaid 200).
+ * Paid job URLs are POST-create only. Unpaid GET is gated by x402 middleware (402).
+ * If a paid GET somehow arrives, point callers at discovery — do not pretend GET creates jobs.
  */
 jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
   const parsedService = ServiceNameSchema.safeParse(req.params.service);
@@ -102,51 +101,14 @@ jobsRouter.get("/v1/services/:service/jobs", (req, res) => {
   const service = parsedService.data;
   const manifest = SERVICE_MANIFESTS[service];
   const baseUrl = defaultPublicBaseUrl();
-  const discovery = discoveryPayload();
-  const entry = discovery.services.find((s) => s.name === service);
-
-  const scrapeFirst =
-    service === "social-listening" ||
-    service === "promo-video" ||
-    service === "outreach" ||
-    service === "competitor-research";
-
-  return res.status(200).json({
-    ok: true,
-    paid: false,
-    probe: "usage",
+  return res.status(405).json({
+    error: "method_not_allowed",
+    allow: ["POST"],
     service,
-    endpoint_path: manifest.endpoint_path,
-    endpoint_url: `${baseUrl}${manifest.endpoint_path}`,
     message:
-      "This URL creates jobs via POST only. GET is a free usage guide for validators and agents.",
-    how_to_call: {
-      method: "POST",
-      path: manifest.endpoint_path,
-      url: `${baseUrl}${manifest.endpoint_path}`,
-      content_type: "application/json",
-      body_shape: {
-        preferred: { input: "object — see discovery input_schema / example_request" },
-        also_accepted: "Flattened top-level fields (same keys as input) without nesting under input",
-        marketplace:
-          "Optional marketplace.job_id / marketplace.agent_id, or X-Okx-Job-Id / X-Marketplace-Job-Id headers",
-      },
-      unpaid_response:
-        "HTTP 402 with PAYMENT-REQUIRED (x402 v2). Settle USD₮0 on eip155:196, then replay the same POST with PAYMENT-SIGNATURE.",
-      paid_response:
-        "HTTP 202 with job_id, status_url, and poll contract. Poll GET /v1/jobs/{job_id} (free) until status is completed, failed, or cancelled. On completed download artifacts[].url; on failed read error + error_code.",
-      ...(scrapeFirst
-        ? {
-            scrape_failures:
-              "If status=failed after create, read error + error_code. Poll until status is completed OR failed (do not only wait for completed). Prefer a scrapeable URL or include product_name. Social-listening continues via product_name or hostname fallback when the URL is unreachable; reddit_no_threads / reddit_no_drafts when no usable comments.",
-          }
-        : {}),
-    },
-    a2mcp_price_usd: manifest.a2mcp_price_usd,
-    eta_seconds: manifest.sla_minutes * 60,
+      "Create jobs with POST + x402 payment. Free schemas and usage examples: GET /v1/discovery.",
+    endpoint_url: `${baseUrl}${manifest.endpoint_path}`,
     discovery_url: `${baseUrl}/v1/discovery`,
-    example_request: entry?.example_request ?? { input: {} },
-    ...pollHints("{job_id}"),
   });
 });
 

@@ -94,20 +94,23 @@ export function buildPaidRoutesConfig(
   const routes: RoutesConfig = {};
 
   for (const manifest of Object.values(SERVICE_MANIFESTS)) {
-    const key = `POST ${manifest.endpoint_path}`;
-    routes[key] = {
-      accepts: {
-        scheme: "exact",
-        network,
-        payTo,
-        price: `$${manifest.a2mcp_price_usd.toFixed(2)}`,
-        maxTimeoutSeconds: 600,
-      },
+    const accepts = {
+      scheme: "exact" as const,
+      network,
+      payTo,
+      price: `$${manifest.a2mcp_price_usd.toFixed(2)}`,
+      maxTimeoutSeconds: 600,
+    };
+    const resource = {
       // Pin https public URL so challenges never use the internal http proxy hop.
       resource: paidResourceUrl(manifest.endpoint_path, env),
       description: `A2MCP job create for ${manifest.name}`,
       mimeType: "application/json",
     };
+    // POST is the real create. Also gate GET so marketplace `x402-check` (no --body)
+    // receives HTTP 402 instead of a free 200 usage guide.
+    routes[`POST ${manifest.endpoint_path}`] = { accepts, ...resource };
+    routes[`GET ${manifest.endpoint_path}`] = { accepts, ...resource };
   }
   return routes;
 }
