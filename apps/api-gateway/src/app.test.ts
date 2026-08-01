@@ -268,6 +268,21 @@ describe("api-gateway", { skip: !hasDb }, () => {
     assert.equal(poll.body.input, undefined);
   });
 
+  it("accepts flattened fields on query string when body is empty", async () => {
+    const res = await request(app)
+      .post("/v1/services/social-listening/jobs")
+      .query({
+        product_url: "https://example.com",
+        product_name: "Example",
+        max_posts: "3",
+      })
+      .set("content-type", "application/json")
+      .send({});
+
+    assert.equal(res.status, 202, JSON.stringify(res.body));
+    assert.ok(res.body.job_id);
+  });
+
   it("unpaid empty POST returns 402 before invalid_body", async () => {
     const mod = await import("./app.js");
     const paidApp = await mod.createApp({

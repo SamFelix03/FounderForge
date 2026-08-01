@@ -2,11 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   extractMarketplaceIds,
+  mergeJobCreateSources,
   normalizeCreateJobBody,
 } from "./normalizeBody.js";
 
 describe("normalizeCreateJobBody", () => {
-  it("leaves nested input untouched", () => {
+  it("leaves nested input untouched when no flat siblings", () => {
     const body = { input: { product_url: "https://linear.app" }, priority: "high" };
     assert.deepEqual(normalizeCreateJobBody(body), body);
   });
@@ -45,6 +46,79 @@ describe("normalizeCreateJobBody", () => {
       }),
       { input: { product_url: "https://linear.app" } },
     );
+  });
+
+  it("merges flat siblings into empty input object", () => {
+    assert.deepEqual(
+      normalizeCreateJobBody({
+        input: {},
+        product_url: "https://example.com",
+        product_name: "Example",
+        max_posts: 5,
+      }),
+      {
+        input: {
+          product_url: "https://example.com",
+          product_name: "Example",
+          max_posts: 5,
+        },
+      },
+    );
+  });
+
+  it("unwraps params wrapper used by some clients", () => {
+    assert.deepEqual(
+      normalizeCreateJobBody({
+        params: { product_url: "https://example.com", max_posts: 3 },
+      }),
+      { input: { product_url: "https://example.com", max_posts: 3 } },
+    );
+  });
+
+  it("parses serviceParams key=value string", () => {
+    assert.deepEqual(
+      normalizeCreateJobBody({
+        serviceParams: "product_url=https://example.com max_posts=3",
+      }),
+      { input: { product_url: "https://example.com", max_posts: 3 } },
+    );
+  });
+});
+
+describe("mergeJobCreateSources", () => {
+  it("prefers body over query and recovers query-only params", () => {
+    assert.deepEqual(
+      mergeJobCreateSources(
+        {},
+        { product_url: "https://from-query.example", max_posts: "5" },
+      ),
+      { product_url: "https://from-query.example", max_posts: "5" },
+    );
+    assert.deepEqual(
+      mergeJobCreateSources(
+        { product_url: "https://from-body.example" },
+        { product_url: "https://from-query.example", max_posts: "2" },
+      ),
+      { product_url: "https://from-body.example", max_posts: "2" },
+    );
+  });
+
+  it("end-to-end: empty body + query flattens to input", () => {
+    const merged = mergeJobCreateSources(
+      {},
+      {
+        product_url: "https://example.com",
+        product_name: "Example",
+        max_posts: "5",
+      },
+    );
+    assert.deepEqual(normalizeCreateJobBody(merged), {
+      input: {
+        product_url: "https://example.com",
+        product_name: "Example",
+        max_posts: 5,
+      },
+    });
   });
 });
 

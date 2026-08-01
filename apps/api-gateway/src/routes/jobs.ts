@@ -23,6 +23,7 @@ import { jobStore } from "../jobs/store.js";
 import { dispatchJob } from "../jobs/dispatch.js";
 import {
   extractMarketplaceIds,
+  mergeJobCreateSources,
   normalizeCreateJobBody,
   POLL_CONTRACT,
 } from "../jobs/normalizeBody.js";
@@ -156,11 +157,17 @@ jobsRouter.post("/v1/services/:service/jobs", async (req, res) => {
   }
   const service: ServiceName = parsedService.data;
 
+  // OKX quote/`--param` often puts fields on the query string while x402 replay
+  // POSTs an empty JSON body — merge both before normalize/Zod.
   const body = CreateJobRequestSchema.safeParse(
-    normalizeCreateJobBody(req.body ?? {}),
+    normalizeCreateJobBody(mergeJobCreateSources(req.body, req.query)),
   );
   if (!body.success) {
-    return res.status(400).json({ error: "invalid_body", details: body.error.flatten() });
+    return res.status(400).json({
+      error: "invalid_body",
+      details: body.error.flatten(),
+      hint: 'Send JSON {"input":{...}} or flattened fields (e.g. product_url) in the POST body. If using payment quote --param, ensure the paid replay includes the same params in the body or query string.',
+    });
   }
 
   const inputCheck = validateServiceInput(service, body.data.input);
